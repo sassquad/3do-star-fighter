@@ -19,6 +19,7 @@ LDLIBS  += -lm
 # MinGW detection: compiler triplet contains "mingw" (cross or native)
 MACHINE := $(shell $(CC) -dumpmachine 2>/dev/null)
 ifneq (,$(or $(findstring mingw,$(MACHINE)),$(filter Windows_NT,$(OS))))
+  SDL2_PREFIX := C:\MinGW
   WIN32 := 1
   EXE   := .exe
   LDFLAGS += -static-libgcc
