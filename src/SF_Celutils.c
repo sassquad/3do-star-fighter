@@ -243,7 +243,7 @@ int32_t cel_returnnextcharnumber (void)
 
 /**************************************/
 
-void cel_movecharacterby (int32_t char_to_move, int32_t move_x, int32_t move_y)
+void cel_movecharacterby (uint32_t char_to_move, int32_t move_x, int32_t move_y)
 
 // Purpose : Moves a character's destination by X,Y pixels
 // Accepts : Char to move, x & y pixel movement
@@ -317,7 +317,7 @@ int32_t cel_addalphastring (char *alpha_string, int32_t alpha_xpos, int32_t alph
 
 {
 
-char	char_toadd;
+unsigned char	char_toadd;
 
 	while (*alpha_string != 0)
 		{
@@ -373,7 +373,7 @@ int32_t cel_getalphastringlen (char *alpha_string)
 
 {
 
-char	char_toadd;
+unsigned char	char_toadd;
 int32_t	pixel_length = 0;
 
 	if (*alpha_string == 0)											// If no string, just return zero

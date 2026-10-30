@@ -27,13 +27,13 @@
 void draw_land()
  
 {
-int32_t loop , temp_long , height_scaler ;
+int32_t loop , temp_long , height_scaler = 0;
 int32_t mc_vars [6] ;
 ship_stack *ship ;
 bit_stack *bit ;
 smoke_stack *smoke ;
 laser_stack *laser ;
-int32_t size_x , size_y , size_z , size ;		
+int32_t size_x = 0, size_y = 0, size_z , size = 0;
 int32_t x_pos , y_pos , z_pos ;
 rotate_node node_data ;
 

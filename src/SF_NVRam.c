@@ -21,7 +21,7 @@ static const char *savedir(void)
 	const char *e;
 	if (dir[0]) return dir;
 	if ((e = getenv("SF_SAVEDIR"))) snprintf(dir, sizeof dir, "%s", e);
-	#ifdef _WIN32
+#ifdef _WIN32
 	else if ((e = getenv("APPDATA"))) snprintf(dir, sizeof dir, "%s/starfighter", e);
 #endif
 	else if ((e = getenv("XDG_DATA_HOME"))) snprintf(dir, sizeof dir, "%s/starfighter", e);
@@ -42,7 +42,9 @@ static void fullname(char *out, size_t n, const char *prefix, const char *name)
 }
 int32_t nvram_load (char *filename, char *gameprefix, char *addr, int32_t size)
 {
-	char p[700]; FILE *f; size_t got;
+	char p[712];
+        FILE *f;
+        size_t got;
 	fullname(p, sizeof p, gameprefix, filename);
 	f = fopen(p, "rb");
 	if (!f) return 0;
@@ -52,7 +54,7 @@ int32_t nvram_load (char *filename, char *gameprefix, char *addr, int32_t size)
 }
 int32_t nvram_save (char *filename, char *gameprefix, char *addr, int32_t size)
 {
-	char p[700]; FILE *f; size_t put;
+	char p[712]; FILE *f; size_t put;
 	fullname(p, sizeof p, gameprefix, filename);
 	f = fopen(p, "wb");
 	if (!f) return 0;

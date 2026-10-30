@@ -326,7 +326,7 @@ void	message_addweapon (void)
 
 int32_t	weapon_type = status.weapon;												// Get type of current weapon
 int32_t 	weapon_num =  players_ship->performance->weapons [weapon_type];				// Get # left of weapon
-char 	weapon_string [8];															// Destination string
+char 	weapon_string [16];															// Destination string
 
 	if (weapon_type == WEAPON_LASER || (weapon_type != WEAPON_LASER && weapon_num <=0))					// If laser or none left, do not print anything
 		(messages [MESSAGE_WEAPON].textcel->tc_CCB) ->ccb_Flags |= CCB_SKIP;							// Make inactive
@@ -372,6 +372,7 @@ void	message_addcamera (int32_t	current_camera)
 {
 
 char	cam_message [32];
+char	cam_messagetmp [64];
 	
 	// DISPLAY CAMERA
 	
@@ -388,8 +389,10 @@ char	cam_message [32];
 			break;
 		}
 
-	if (camera [current_camera].instance <0)
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__NO, 0));
+	if (camera [current_camera].instance <0) {
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__NO, 0));
+		strcpy(cam_message, cam_messagetmp);
+       }
 	else
 		{
 		
@@ -398,16 +401,20 @@ char	cam_message [32];
 		switch (camera [current_camera].type)
 			{
 			case CAMERA_NORMAL :
-				sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__VIEW, 0));
+				snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__VIEW, 0));
+				strcpy(cam_message, cam_messagetmp);
 				break;
 			case CAMERA_TRACKING :
-				sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__TRACKING, 0));
+				snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__TRACKING, 0));
+				strcpy(cam_message, cam_messagetmp);
 				break;
 			case CAMERA_FLYBY :
-				sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__FLYBY, 0));
+				snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__FLYBY, 0));
+				strcpy(cam_message, cam_messagetmp);
 				break;
 			case CAMERA_INTERNAL :
-				sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__VIEW_FROM, 0));
+				snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__VIEW_FROM, 0));
+				strcpy(cam_message, cam_messagetmp);
 				break;
 			}
 		}
@@ -417,30 +424,38 @@ char	cam_message [32];
 	switch (camera [current_camera].view)
 	{
 	case 0 :
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__PLAYER, 0));
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__PLAYER, 0));
+		strcpy(cam_message, cam_messagetmp);
 		break;
 	case 1 :
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__TEAM, 0));
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__TEAM, 0));
+		strcpy(cam_message, cam_messagetmp);
 		break;
 	case 2 :
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__ENEMY, 0));
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__ENEMY, 0));
+		strcpy(cam_message, cam_messagetmp);
 		break;
 	case 3 :
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__WEAPON, 0));
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__WEAPON, 0));
+		strcpy(cam_message, cam_messagetmp);
 		break;
 	case 4 : 
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__VEHICLE, 0));
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__VEHICLE, 0));
+		strcpy(cam_message, cam_messagetmp);
 		break;
 	}
 	
 	// DISPLAY INSTANCE
 	
-	if (camera [current_camera].instance <0)
-		sprintf(cam_message,"%s %s", cam_message, message_decode (MTXT__AVAILABLE, 0));
+	if (camera [current_camera].instance <0) {
+		snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %s", cam_message, message_decode (MTXT__AVAILABLE, 0));
+		strcpy(cam_message, cam_messagetmp);
+	}
 	else
 		{
 		if (camera [current_camera].view != 0)
-			sprintf(cam_message,"%s %d", cam_message, camera [current_camera].instance+1);
+			snprintf(cam_messagetmp, sizeof(cam_messagetmp), "%s %d", cam_message, camera [current_camera].instance+1);
+			strcpy(cam_message, cam_messagetmp);
 		}
 			
 	// ADD MESSAGE

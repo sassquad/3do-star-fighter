@@ -241,7 +241,7 @@ char	backdrop_file [48];
 static const uint8_t *rd_cur;
 static uint8_t  rd8 (void)  { return *rd_cur++; }
 static int32_t  rd32 (void) { int32_t v = (int32_t)(((uint32_t)rd_cur[0]<<24)|((uint32_t)rd_cur[1]<<16)|((uint32_t)rd_cur[2]<<8)|rd_cur[3]); rd_cur += 4; return v; }
-static void     rdstr (char *d, int n) { memcpy (d, rd_cur, (size_t)n); rd_cur += n; }
+static void     rdstr (void *d, int n) { memcpy (d, rd_cur, (size_t)n); rd_cur += n; }
 
 static void rd_performance (performance_data *p)
 {

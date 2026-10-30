@@ -1083,7 +1083,7 @@ int32_t		xsearch_distance,
 
 /**************************************/
 
-int32_t	war_setformationposition (ship_stack *formation_ship, char formation_position, int32_t print_message)
+int32_t	war_setformationposition (ship_stack *formation_ship, uint8_t formation_position, int32_t print_message)
 
 // Purpose : Registers a ship at a fixed position in the players formation
 // Accepts : Pointer to a ship, and a formation position number
@@ -1145,7 +1145,7 @@ void	war_squashformationup (void)
 // Returns : Nothing
 
 {
-char		ship_formationplace=1,
+unsigned char		ship_formationplace=1,
 			ship_formationcount;
 
 ship_stack	*ship_in_formation;

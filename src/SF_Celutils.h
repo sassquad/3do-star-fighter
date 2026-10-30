@@ -160,7 +160,7 @@ int32_t 	cel_addalphastring (char*, int32_t, int32_t, int32_t);				// Add a stri
 void	cel_getalphastart (alpha_char*);							// Set a chars start points depending on add mode
 void	cel_deleteletters (int32_t);									// Deletes last X chars added to alphalist
 int32_t	cel_returnnextcharnumber (void);							// Returns no. of chars in
-void	cel_movecharacterby (int32_t, int32_t, int32_t);						// Moves a character
+void	cel_movecharacterby (uint32_t, int32_t, int32_t);						// Moves a character
 void 	cel_rendercharactermap (int32_t);								// Render char map to cel list
 
 #endif

@@ -1436,7 +1436,7 @@ int32_t	menu_displayformation (int32_t	formation_display)
 
 ship_stack	*ship = (ship_stack*) (ships.info).start_address;
 
-char	names_attack	[16];
+unsigned char	names_attack	[16];
 
 int32_t	form_xpos = 0-16,
 		form_ypos = 65-16,
@@ -1445,9 +1445,10 @@ int32_t	form_xpos = 0-16,
 		friendly_total = 0,
 		friendly_totalout = 0,
 		friendly_attacking = 0,
-		friendly_loop,
 		
 		pilot_toggley = 0;
+uint32_t	friendly_loop;
+
 	
 	while ((ship->header).status == 1)
 		{
@@ -2018,15 +2019,15 @@ static	int32_t	stick_icon [6] [3] = 	{
 			case 2 :
 			case 3 :
 			
-				sprintf (message_decode (menus [CALIBRATE_JOYSTICK_MENU].title, 1), message_decode (MMNU20_MODE+0, 1));
+				sprintf (message_decode (menus [CALIBRATE_JOYSTICK_MENU].title, 1), "%s", message_decode (MMNU20_MODE+0, 1));
 				break;
 			
 			case 4 :
-				sprintf (message_decode (menus [CALIBRATE_JOYSTICK_MENU].title, 1), message_decode (MMNU20_MODE+1, 1));
+				sprintf (message_decode (menus [CALIBRATE_JOYSTICK_MENU].title, 1), "%s", message_decode (MMNU20_MODE+1, 1));
 				break;
 				
 			case 5 :
-				sprintf (message_decode (menus [CALIBRATE_JOYSTICK_MENU].title, 1), message_decode (MMNU20_MODE+2, 1));
+				sprintf (message_decode (menus [CALIBRATE_JOYSTICK_MENU].title, 1), "%s", message_decode (MMNU20_MODE+2, 1));
 				break;
 			}
 		

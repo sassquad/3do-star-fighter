@@ -11,7 +11,7 @@
 
 void make_sound ( int32_t x_pos , int32_t y_pos , int32_t z_pos , int32_t type )
 {
-int32_t pitch , sample ;
+int32_t pitch = 0, sample = 0;
 sound_details sound_data ;
 
 get_sound_details( &sound_data , x_pos , y_pos , z_pos ) ;

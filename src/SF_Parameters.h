@@ -34,7 +34,7 @@ typedef struct game_configuration	{
 									char		free3;
 									
 									char		language;
-									char		control_method;
+									uint8_t		control_method;
 									char		music_volume;
 									char		sound_volume;
 									
@@ -43,7 +43,7 @@ typedef struct game_configuration	{
 									char		video_on;
 									char		free5;
 									
-									char		flight_controls [12];
+									unsigned char		flight_controls [12];
 									
 									int32_t		stick_x_min;
 									int32_t		stick_x_max;

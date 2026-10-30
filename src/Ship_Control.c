@@ -1613,7 +1613,7 @@ ship_stack*  add_ship ( int32_t x_pos , int32_t y_pos , int32_t z_pos ,
 
 ship_stack *ship ;
 
-static test_the_fucking_fighters = 0 ;
+static int test_the_fucking_fighters = 0 ;
 
 
 //if (type!=(PLAYERS_SHIP<<4)) return( NULL ) ;

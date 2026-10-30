@@ -885,7 +885,7 @@ int32_t	textcel,
 			switch (textcel_case)
 				{
 				case -1 :
-					sprintf (mission_line, "");
+					sprintf (mission_line, "%s", "");
 					mission_linecolour = WHITE_15;
 					break;	
 				case 0 :

@@ -16,8 +16,7 @@
 #define FIND_OBJECT_POSITION \
 x_pos = (unsigned) x_grid<<25 ;\
 y_pos = (unsigned) y_grid<<25 ;\
-z_pos = (int32_t) ((height_map [ (y_grid<<1) ] [ (x_grid<<1) ])-17)<<21 ;\
-//if (z_pos < 0) z_pos = 0 ;\ 
+z_pos = (int32_t) ((height_map [ (y_grid<<1) ] [ (x_grid<<1) ])-17)<<21 ;
 
 void ground_update(void)
 

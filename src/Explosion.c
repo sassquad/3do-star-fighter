@@ -343,7 +343,7 @@ int32_t x_pos , y_pos , z_pos ;
 int32_t bit_mask = 255 ;		// Set a big bunch of bits to enable all explosion for all groups
 							// unless set otherwise by special group releasing explosions
 int32_t group_number = 0 ;
-int32_t explosion_velocity ;
+int32_t explosion_velocity = 0;
 
 graphics_details *details = (graphics_details*) static_graphics_adr ;
 explosion_details *explosion_data ;
@@ -580,7 +580,7 @@ static int32_t x_rot = 0 ;
 static int32_t y_rot = 0 ;
 
 int32_t x_exp , y_exp , z_exp ;
-int32_t bit_size ;
+int32_t bit_size = 0;
 int32_t line_size ;
 int32_t temp_long ;
 int32_t counter = 1 ;

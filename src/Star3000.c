@@ -550,8 +550,8 @@ void game_play (int32_t command)
 int32_t	shield_extent=0,							// Shield display variables
 		shield_value=0,
 		
-		tracking_distance,							// Tracking display variables
-		tracking_graphic,
+		tracking_distance = 0,							// Tracking display variables
+		tracking_graphic = 0,
 									
 		camera_touse,								// Camera & Crystal variables
 		crystal_loop,

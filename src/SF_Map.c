@@ -1209,7 +1209,7 @@ static	char	ship_endstring [48];
 			if (ship->special_data->target_type == SDB_TARGETTYPE_MULTIPLE)
 				sprintf (ship_endstring, "%s %s", message_decode (MTXT__ATTACKING, 0), message_decode (MTXT__MULTIPLE_TARGETS, 0));
 			else
-				sprintf (ship_endstring, "%s %s", message_decode (MTXT__ATTACKING, 0), map_return_ship_title ((ship_stack*) ship->special_data->command_address, 0), 0);
+				sprintf (ship_endstring, "%s %s", message_decode (MTXT__ATTACKING, 0), map_return_ship_title ((ship_stack*) ship->special_data->command_address, 0));
 			break;
 			
 		case SDB_MODE_FLIGHTPATH :
@@ -1217,7 +1217,7 @@ static	char	ship_endstring [48];
 			break;
 			
 		case SDB_MODE_FORMATION :
-			sprintf (ship_endstring, "%s %s", message_decode (MTXT__FORMATION_WITH, 0), map_return_ship_title ((ship_stack*) ship->special_data->command_address, 0), 0);
+			sprintf (ship_endstring, "%s %s", message_decode (MTXT__FORMATION_WITH, 0), map_return_ship_title ((ship_stack*) ship->special_data->command_address, 0));
 			break;
 		}
 	

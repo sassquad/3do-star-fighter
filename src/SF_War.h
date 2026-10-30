@@ -108,7 +108,7 @@ void	ship_settoflightpoint (ship_stack*, ship_sdb*);						// Set a ship's gotoxy
 void	war_update_multipleattackrequests (ship_stack*, ship_sdb*);			// Fire weapons / Acquire new targets for Multiple targetting ship
 int32_t	ship_setmultipletargets (ship_stack*, int32_t, char);					// Acquire new target(s) for ship within search range
 
-int32_t	war_setformationposition (ship_stack*, char, int32_t);					// Put a ship in formation with the player at a fixed pos
+int32_t	war_setformationposition (ship_stack*, uint8_t, int32_t);					// Put a ship in formation with the player at a fixed pos
 int32_t	war_addshiptoformation (ship_stack *formation_ship, int32_t);			// Put a ship in formation with the player at any pos
 void	war_squashformationup (void);										// Squash to the players formation
 

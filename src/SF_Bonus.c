@@ -59,42 +59,42 @@ crystal_award	crystal_awards [MAX_AWARDS] =
 
 // PERFORMANCE UPGRADES (NORMAL)
 
-{0,			C_GREEN,	C_YELLOW,	C_GREEN,	bonus_wingpod,	1,						0,					0},		// Add 1 WINGPOD
-{C_CYAN,	C_RED,		C_CYAN,		C_RED,		bonus_wingpod,	2,						0,					0},		// Add 2 WINGPODS
+{{0,			C_GREEN,	C_YELLOW,	C_GREEN},	bonus_wingpod,	1,						0,					0},		// Add 1 WINGPOD
+{{C_CYAN,	C_RED,		C_CYAN,		C_RED},		bonus_wingpod,	2,						0,					0},		// Add 2 WINGPODS
 
 // WEAPONS UPGRADES (NORMAL)
 
-{0,			0,			C_RED, 		C_RED,		bonus_weapon,	WEAPON_LASER,			MTXT__LASER,		1},		// Increase LASER
-{0,			0,			C_BLUE, 	C_BLUE,		bonus_weapon,	WEAPON_ATG,				MTXT__ATG,			10},	// Increase ATG
-{0,			0,			C_MAGENTA,	C_MAGENTA,	bonus_weapon,	WEAPON_ATA,				MTXT__ATA,			10},	// Increase ATA
-{C_MAGENTA,	C_RED,		C_MAGENTA,	C_RED,		bonus_weapon,	WEAPON_MEGA_BOMB, 		MTXT__MEGABOMB,		15},	// Increase MEGABOMB
-{C_MAGENTA,	C_GREEN,	C_MAGENTA,	C_GREEN,	bonus_weapon,	WEAPON_BEAM_LASER,		MTXT__BEAM_LASER,	250},	// Increase BEAM LASER
-{C_MAGENTA,	C_BLUE,		C_MAGENTA,	C_BLUE,		bonus_weapon,	WEAPON_MULTI_MISSILE,	MTXT__MULTI_MISSILE,10},	// Increase MULTIMISSL
-{C_MAGENTA,	C_ORANGE,	C_MAGENTA,	C_ORANGE,	bonus_weapon,	WEAPON_MINE,			MTXT__MINES,		10},	// Increase MINES
-{0,			0,			C_BLUE,		C_GREEN,	bonus_weapon,	WEAPON_ECM,				MTXT__ECM,			5},		// Increase ECM's
+{{0,			0,			C_RED, 		C_RED},		bonus_weapon,	WEAPON_LASER,			MTXT__LASER,		1},		// Increase LASER
+{{0,			0,			C_BLUE, 	C_BLUE},		bonus_weapon,	WEAPON_ATG,				MTXT__ATG,			10},	// Increase ATG
+{{0,			0,			C_MAGENTA,	C_MAGENTA},	bonus_weapon,	WEAPON_ATA,				MTXT__ATA,			10},	// Increase ATA
+{{C_MAGENTA,	C_RED,		C_MAGENTA,	C_RED},		bonus_weapon,	WEAPON_MEGA_BOMB, 		MTXT__MEGABOMB,		15},	// Increase MEGABOMB
+{{C_MAGENTA,	C_GREEN,	C_MAGENTA,	C_GREEN},	bonus_weapon,	WEAPON_BEAM_LASER,		MTXT__BEAM_LASER,	250},	// Increase BEAM LASER
+{{C_MAGENTA,	C_BLUE,		C_MAGENTA,	C_BLUE},		bonus_weapon,	WEAPON_MULTI_MISSILE,	MTXT__MULTI_MISSILE,10},	// Increase MULTIMISSL
+{{C_MAGENTA,	C_ORANGE,	C_MAGENTA,	C_ORANGE},	bonus_weapon,	WEAPON_MINE,			MTXT__MINES,		10},	// Increase MINES
+{{0,			0,			C_BLUE,		C_GREEN},	bonus_weapon,	WEAPON_ECM,				MTXT__ECM,			5},		// Increase ECM's
 
 // WEAPONS UPGRADES (ADDED)
 
-{0,			0,			C_CYAN,		C_YELLOW,	bonus_weapon,	WEAPON_MULTI_MISSILE,	MTXT__MULTI_MISSILE,3},		// Increase MULTIMISSL
-{C_CYAN,	C_GREEN,	C_CYAN,		C_BLUE,		bonus_weapon,	WEAPON_ECM,				MTXT__ECM,			50},	// Increase ECM's
+{{0,			0,			C_CYAN,		C_YELLOW},	bonus_weapon,	WEAPON_MULTI_MISSILE,	MTXT__MULTI_MISSILE,3},		// Increase MULTIMISSL
+{{C_CYAN,	C_GREEN,	C_CYAN,		C_BLUE},		bonus_weapon,	WEAPON_ECM,				MTXT__ECM,			50},	// Increase ECM's
 
 // SHIP UPGRADES (NORMAL)
 
-{0,			0,			C_YELLOW,	C_YELLOW,	bonus_performance,		1,				MTXT__SHIELDS,		0},		// Shields Upgrade
-{0,			0,			C_BLUE,		C_YELLOW,	bonus_performance,		1,				MTXT__ENGINE,		0},		// Engine Upgrade
-{0,			0,			C_RED,		C_YELLOW,	bonus_performance,		1,				MTXT__CONTROL,		0},		// Control Upgrade
+{{0,			0,			C_YELLOW,	C_YELLOW},	bonus_performance,		1,				MTXT__SHIELDS,		0},		// Shields Upgrade
+{{0,			0,			C_BLUE,		C_YELLOW},	bonus_performance,		1,				MTXT__ENGINE,		0},		// Engine Upgrade
+{{0,			0,			C_RED,		C_YELLOW},	bonus_performance,		1,				MTXT__CONTROL,		0},		// Control Upgrade
 
 // SPECIAL BONUSES
 
-{0,			C_CYAN,		C_CYAN,		C_DARK,		bonus_fastcrystal,		10,				0,					0},		// Fast adder crystals
-{C_DARK,	C_DARK,		C_DARK,		C_DARK,		bonus_fastcrystal,		20,				0,					0},		// Fast adder crystals
-{C_DARK,	C_DARK,		C_DARK,		C_RED,		bonus_megasetup_start,	40,				0,					0},		// Megaship !
+{{0,			C_CYAN,		C_CYAN,		C_DARK},		bonus_fastcrystal,		10,				0,					0},		// Fast adder crystals
+{{C_DARK,	C_DARK,		C_DARK,		C_DARK},		bonus_fastcrystal,		20,				0,					0},		// Fast adder crystals
+{{C_DARK,	C_DARK,		C_DARK,		C_RED},		bonus_megasetup_start,	40,				0,					0},		// Megaship !
 
 // SHIP DAMAGE (NORMAL)
 
-{0,			C_MAGENTA,	C_YELLOW,	C_BLUE,		bonus_performance,		-1,				MTXT__SHIELDS,		0},		// Shields Damage
-{0,			C_MAGENTA,	C_RED,		C_BLUE,		bonus_performance,		-1,				MTXT__ENGINE,		0},		// Engine Damage
-{0,			C_MAGENTA,	C_GREEN,	C_BLUE,		bonus_performance,		-1,				MTXT__CONTROL,		0},		// Control Damage
+{{0,			C_MAGENTA,	C_YELLOW,	C_BLUE},		bonus_performance,		-1,				MTXT__SHIELDS,		0},		// Shields Damage
+{{0,			C_MAGENTA,	C_RED,		C_BLUE},		bonus_performance,		-1,				MTXT__ENGINE,		0},		// Engine Damage
+{{0,			C_MAGENTA,	C_GREEN,	C_BLUE},		bonus_performance,		-1,				MTXT__CONTROL,		0},		// Control Damage
 
 };
 
@@ -275,7 +275,7 @@ int32_t	bonus_performance (int32_t	value, int32_t mtxt_bonustype, int32_t nothin
 
 {
 
-int32_t	*item_pointer;
+int32_t	*item_pointer = NULL;
 char	item_message [32];
 
 	// Decide which parameter to adjust

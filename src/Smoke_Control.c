@@ -174,7 +174,7 @@ void add_smoke( int32_t x_pos , int32_t y_pos , int32_t z_pos ,
 {
 
 int32_t coll_check ;
-int32_t counter ;
+int32_t counter = 0;
 smoke_stack *smoke ;
 int32_t size ;
 
