@@ -963,7 +963,7 @@ war_update_defend_leader(ship_stack *ship, ship_sdb *ship_sdb_ptr,
     return (0);
   }
 
-  if (arm_random() & 3 != 3) { // If not rnd(4) then no attack
+  if ((arm_random() & 3) != 3) { // If not rnd(4) then no attack
     return (0);
   }
 

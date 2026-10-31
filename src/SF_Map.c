@@ -607,7 +607,7 @@ map_drawships(int32_t map_toggle)
 
         item_xpos =
             (item_xpos - (map_x << 24)) >> 24; // Scale to X&Y to 255 & Invert Y
-        item_ypos = -(item_ypos - (map_y << 24) >> 24);
+        item_ypos = -((item_ypos - (map_y << 24)) >> 24);
 
         item_xpos = item_xpos << (4 - map_zoom); // Scale to zoom
         item_ypos = item_ypos << (4 - map_zoom);
@@ -663,7 +663,7 @@ map_addshipitem1(ship_stack *ship, int32_t info_type)
   int32_t item_xpos = ship->x_pos; // Get ship's xpos
   int32_t item_ypos = ship->y_pos; // Get ship's ypos
   int32_t item_rotation =
-      (4 + (((ship->x_rot + (64 << 10))) >> 17) & 7); // Get rotation (0 to 7)
+      ((4 + (((ship->x_rot + (64 << 10))) >> 17)) & 7); // Get rotation (0 to 7)
   int32_t item_side;
 
   if (ship->special_data == NULL) { // Ship must have SDB for this display
@@ -824,7 +824,7 @@ map_drawtargets(int32_t map_toggle)
 
         item_xpos =
             (item_xpos - (map_x << 24)) >> 24; // Scale to X&Y to 255 & Invert Y
-        item_ypos = -(item_ypos - (map_y << 24) >> 24);
+        item_ypos = -((item_ypos - (map_y << 24)) >> 24);
 
         item_xpos = item_xpos << (4 - map_zoom); // Scale to zoom
         item_ypos = item_ypos << (4 - map_zoom);
@@ -865,7 +865,7 @@ map_getoffsets(int32_t *item_xpos, int32_t *item_ypos)
 {
   *item_xpos =
       (*item_xpos - (map_x << 24)) >> 24; // Scale to X&Y to 255 & Invert Y
-  *item_ypos = -(*item_ypos - (map_y << 24) >> 24);
+  *item_ypos = -((*item_ypos - (map_y << 24)) >> 24);
 
   *item_xpos = *item_xpos << (4 - map_zoom); // Scale to zoom
   *item_ypos = *item_ypos << (4 - map_zoom);

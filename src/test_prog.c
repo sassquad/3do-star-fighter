@@ -109,7 +109,7 @@ new_fighter_control(ship_stack *ship)
   ship->aim_counter -= 1;
   if (ship->aim_counter < 0) {
     // Slight chance of short burst of mega steering
-    if (arm_random() & 3 == 0) {
+    if ((arm_random() & 3) == 0) {
       ship->aim_counter = 32 + (arm_random() & 31);
       ship->aim_x_vel = 512 + (arm_random() & 511);
     } else {

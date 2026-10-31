@@ -4,4 +4,5 @@ syntax: glob
 *~
 
 starfighter
+starfighter-headless
 obj
