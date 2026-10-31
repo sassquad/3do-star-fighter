@@ -33,9 +33,6 @@ setup_tables(void)
   laser_stack *laser;
   int32_t hangar_capicity = 4;
 
-  explosion_details *explosion_data;
-  explosion_details_header *explosion_header;
-
   section_groups *section_group_data;
   section_details_header *section_data_header = NULL;
   section_details *section_data;

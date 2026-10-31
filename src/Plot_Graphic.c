@@ -432,7 +432,7 @@ do_perspective(int32_t count_minus1, int high)
 static void
 rotate_graphic(const int32_t *m, const int32_t *pos)
 {
-  int32_t px = pos[0], py = pos[1], pz = pos[2], a, b, nodes_a, nodes_b, radar,
+  int32_t px = pos[0], py = pos[1], pz = pos[2], a, b, nodes_a, radar,
           k, node = 0;
   const int32_t *mat = m;
   int32_t counter, offs = 40;

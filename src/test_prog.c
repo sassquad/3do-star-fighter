@@ -38,9 +38,8 @@ new_fighter_control(ship_stack *ship)
 {
 
   rotate_node node_data;
-  rotate_node node_data2;
   target_struct target;
-  int32_t x_aim, y_aim, z_aim, aim;
+  int32_t x_aim, y_aim, aim;
   int32_t x_dist, y_dist, z_dist, dist;
   int32_t temp_long, temp_long2, temp_long3;
   int32_t x_rot_rel, y_rot_rel;
@@ -50,7 +49,7 @@ new_fighter_control(ship_stack *ship)
   int32_t coll_check = 0;
   int32_t goto_x, goto_y, goto_z;
   int32_t loop;
-  int32_t y_limit, mode;
+  int32_t mode;
 
   ship_stack *temp_ship;
 
@@ -579,19 +578,12 @@ new_flight_path_control(ship_stack *ship)
 {
 
   rotate_node node_data;
-  rotate_node node_data2;
   target_struct target;
-  int32_t x_aim, y_aim, z_aim, aim;
+  int32_t x_aim, y_aim;
   int32_t x_dist, y_dist, z_dist, dist;
   int32_t temp_long, temp_long2;
 
   int32_t z_roll;
-
-  int32_t y_limit, mode;
-
-  ship_stack *temp_ship;
-
-  mode = ship->special_data->control_mode;
 
   // Test remove fire requests
   // ship->fire_request = WEAPON_NOTHING ;
@@ -687,11 +679,6 @@ new_flight_path_control(ship_stack *ship)
   if (y_aim < 0) {
     y_aim = -y_aim;
   }
-  if (x_aim > y_aim) {
-    aim = x_aim;
-  } else {
-    aim = y_aim;
-  }
 
   ship->z_control = -((node_data.x_pos / temp_long));
 
@@ -776,15 +763,14 @@ new_formation_control(ship_stack *ship)
 {
 
   rotate_node node_data;
-  rotate_node node_data2;
   target_struct target;
-  int32_t x_aim, y_aim, z_aim, aim;
+  int32_t x_aim, y_aim, aim;
   int32_t x_dist, y_dist, z_dist, dist;
-  int32_t temp_long, temp_long2;
+  int32_t temp_long;
 
   int32_t z_roll;
 
-  int32_t y_limit, mode;
+  int32_t mode;
 
   ship_stack *temp_ship;
 

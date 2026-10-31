@@ -160,7 +160,6 @@ add_smoke(int32_t x_pos, int32_t y_pos, int32_t z_pos, int32_t x_vel,
   int32_t coll_check;
   int32_t counter = 0;
   smoke_stack *smoke;
-  int32_t size;
 
   smoke_stack *temp_smoke = NULL;
   smoke_stack *new_smoke = NULL;

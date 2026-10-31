@@ -103,19 +103,12 @@ void
 explode_ship(ship_stack *ship)
 {
   int32_t loop;
-  int32_t size = 0;
   int32_t group_mask =
       255; // Set all bits to explode all groups unless set otherwise
   int32_t centre_group;
-  int32_t x_start, y_start, z_start;
-  int32_t x_end, y_end, z_end;
   int32_t style = EXPLOSION_STYLE_NORMAL;
 
-  rotate_node node_data;
-
   graphics_details *details;
-  explosion_details *explosion_data;
-  explosion_details_header *explosion_header;
 
   int32_t explosion_velocity = 8;
 
@@ -128,26 +121,16 @@ explode_ship(ship_stack *ship)
       // Get the start adr of the explosion data for this explosion section
       if (ship->type >= SHIP_SECTION) {
         details = (graphics_details *) ships_adr;
-        explosion_header = (explosion_details_header *) GPTR(
-            (details + ((ship->type) - SHIP_SECTION))->explosion_adr);
         // ship->type -= SHIP_SECTION ;
       } else {
         details = (graphics_details *) static_graphics_adr;
-        explosion_header = (explosion_details_header *) GPTR(
-            (details + ((ship->type) - SECTION))->explosion_adr);
         // ship->type -= SECTION ;
       }
 
       group_mask = ~ship->group_mask;
     } else {
       details = (graphics_details *) ships_adr;
-      // Get the start adr of the explosion data for this ship
-      explosion_header = (explosion_details_header *) GPTR(
-          (details + (ship->type))->explosion_adr);
     }
-
-    // Get the start adr of the 1st explosion line
-    explosion_data = (explosion_details *) (explosion_header + 1);
 
     switch (ship->type) {
 
@@ -182,7 +165,6 @@ explode_ship(ship_stack *ship)
         explosion_velocity = 8;
         style = EXPLOSION_STYLE_LOADS_OF_BITS;
       } else {
-        size = 6;
         explosion_velocity = 16;
       }
 
@@ -264,13 +246,11 @@ explode_ship(ship_stack *ship)
     }
 
     if (ship->type >= SECTION && ship->type < SHIP_SECTION) {
-      size = 8;
       explosion_velocity = 22;
     }
 
     if (ship->type >= SHIP_SECTION) {
       if (((ship->type & 255) >> 4) == BIG_SHIP) {
-        size = 6;
         explosion_velocity = 16;
       } else {
         explosion_velocity = 8;
@@ -302,8 +282,6 @@ explode_ship(ship_stack *ship)
 void
 explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
 {
-  int32_t loop;
-  int32_t size = 4;
   int32_t type;
   int32_t x_pos, y_pos, z_pos;
   int32_t bit_mask =
@@ -313,8 +291,6 @@ explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
   int32_t explosion_velocity = 0;
 
   graphics_details *details = (graphics_details *) static_graphics_adr;
-  explosion_details *explosion_data;
-  explosion_details_header *explosion_header;
 
   type = (int32_t) poly_map[y_grid][x_grid];
 
@@ -330,85 +306,71 @@ explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
   switch (style) {
 
     case REF_STATIC_EXPLODE_SMALL:
-      size = 2;
       explosion_velocity = 9 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, SMALL_EXPLOSION_SOUND);
       break;
 
     case REF_STATIC_EXPLODE_SMALL_MUSHROOM:
-      size = 2;
-      explosion_velocity = 11 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, MEDIUM_EXPLOSION_SOUND);
       add_smoke(x_pos, y_pos, z_pos, 0, 0, 0, SMALL_MUSHROOM_CLOUD, 0);
       break;
 
     case REF_STATIC_EXPLODE_SMALL_FAST:
-      size = 2;
       explosion_velocity = 13 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, SMALL_EXPLOSION_SOUND);
       break;
 
     case REF_STATIC_EXPLODE_SMALL_FAST_MUSHROOM:
-      size = 2;
       explosion_velocity = 15 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, MEDIUM_EXPLOSION_SOUND);
       add_smoke(x_pos, y_pos, z_pos, 0, 0, 0, SMALL_MUSHROOM_CLOUD, 0);
       break;
 
     case REF_STATIC_EXPLODE_MEDIUM:
-      size = 6;
       explosion_velocity = 17 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, MEDIUM_EXPLOSION_SOUND);
       break;
 
     case REF_STATIC_EXPLODE_MEDIUM_MUSHROOM:
-      size = 6;
       explosion_velocity = 19 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       add_smoke(x_pos, y_pos, z_pos, 0, 0, 0, MEDIUM_MUSHROOM_CLOUD, 0);
       break;
 
     case REF_STATIC_EXPLODE_MEDIUM_FAST:
-      size = 6;
       explosion_velocity = 21 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, MEDIUM_EXPLOSION_SOUND);
       break;
 
     case REF_STATIC_EXPLODE_MEDIUM_FAST_MUSHROOM:
-      size = 6;
       explosion_velocity = 23 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       add_smoke(x_pos, y_pos, z_pos, 0, 0, 0, MEDIUM_MUSHROOM_CLOUD, 0);
       break;
 
     case REF_STATIC_EXPLODE_BIG:
-      size = 8;
       explosion_velocity = 25 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       break;
 
     case REF_STATIC_EXPLODE_BIG_MUSHROOM:
-      size = 8;
       explosion_velocity = 27 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, VERY_BIG_EXPLOSION_SOUND);
       add_smoke(x_pos, y_pos, z_pos, 0, 0, 0, BIG_MUSHROOM_CLOUD, 0);
       break;
 
     case REF_STATIC_EXPLODE_BIG_FAST:
-      size = 8;
       explosion_velocity = 29 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       break;
 
     case REF_STATIC_EXPLODE_BIG_FAST_MUSHROOM:
-      size = 8;
       explosion_velocity = 29 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, VERY_BIG_EXPLOSION_SOUND);
       add_smoke(x_pos, y_pos, z_pos, 0, 0, 0, BIG_MUSHROOM_CLOUD, 0);
       break;
 
     case REF_STATIC_EXPLODE_MEGATOWER_2_GROUPS:
-      size = 6;
       explosion_velocity = 21 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       bit_mask = GROUP_1; // Don't plot groups with this bit set
@@ -418,7 +380,6 @@ explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
       break;
 
     case REF_STATIC_EXPLODE_TOWER_1_GROUP:
-      size = 8;
       explosion_velocity = 21 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       bit_mask = GROUP_0; // Don't plot groups with this bit set - explode these
@@ -429,7 +390,6 @@ explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
       break;
 
     case REF_STATIC_EXPLODE_STAR_TOWER_4_GROUPS:
-      size = 6;
       explosion_velocity = 21 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
       bit_mask = GROUP_1; // Don't plot groups with this bit set
@@ -439,7 +399,6 @@ explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
       break;
 
     case REF_STATIC_EXPLODE_PALACE_REL_3_GROUPS:
-      size = 6;
       explosion_velocity = 21 + ((arm_random()) & 3);
       make_sound(x_pos, y_pos, z_pos, BIG_EXPLOSION_SOUND);
 
@@ -469,11 +428,6 @@ explode_static_graphic(int32_t x_grid, int32_t y_grid, int32_t style)
 
       break;
   }
-
-  explosion_header =
-      (explosion_details_header *) GPTR((details + type)->explosion_adr);
-
-  explosion_data = (explosion_details *) (explosion_header + 1);
 
   explode_static_from_collision_box(x_grid + (y_grid << 7), explosion_velocity,
                                     x_grid + (y_grid << 7),
@@ -973,7 +927,6 @@ explosion_section_control(ship_stack *section)
   collision_details *collision_data;
   int32_t loop, coll_check;
   rotate_node node_data;
-  int32_t x_size, y_size, z_size;
   section_groups *section_group_data;
   section_details_header *section_data_header = NULL;
   section_details *section_data;
@@ -1658,13 +1611,12 @@ explode_static_from_collision_box(int32_t grid_ref, int32_t explosion_velocity,
   graphics_details *details = (graphics_details *) static_graphics_adr;
   int32_t x_size, y_size, z_size, size = 0;
   int32_t bit_size, line_size;
-  int32_t temp_long;
   int32_t too_many;
 
   int32_t x_start, y_start, z_start;
   int32_t x_pos_exp, y_pos_exp, z_pos_exp;
   int32_t x_counter, y_counter, z_counter;
-  int32_t x_vel, y_vel, z_vel;
+  int32_t y_vel, z_vel;
   int32_t x_loop, y_loop, z_loop;
 
   int32_t x_exp, y_exp, z_exp;
@@ -1741,7 +1693,6 @@ explode_static_from_collision_box(int32_t grid_ref, int32_t explosion_velocity,
         x_counter = 1;
       }
       x_start = coll_data->x_pos + ((x_size / x_counter) >> 1);
-      x_vel = (x_size / x_counter);
 
       y_counter = y_size / line_size;
       if (y_counter < 0) {
@@ -1881,15 +1832,13 @@ explode_ship_from_collision_box(ship_stack *ship, int32_t explosion_velocity,
   graphics_details *details = (graphics_details *) ships_adr;
   int32_t x_size, y_size, z_size, size = 0;
   int32_t bit_size, line_size;
-  int32_t temp_long;
   int32_t too_many;
   rotate_node node_data;
 
   int32_t x_start, y_start, z_start;
   int32_t x_pos_exp, y_pos_exp, z_pos_exp;
-  int32_t x_pos_rot_exp, y_pos_rot_exp, z_pos_rot_exp;
   int32_t x_counter, y_counter, z_counter;
-  int32_t x_vel, y_vel, z_vel;
+  int32_t y_vel, z_vel;
   int32_t x_loop, y_loop, z_loop;
 
   int32_t x_exp, y_exp, z_exp;
@@ -1975,7 +1924,6 @@ explode_ship_from_collision_box(ship_stack *ship, int32_t explosion_velocity,
         x_counter = 1;
       }
       x_start = coll_data->x_pos + ((x_size / x_counter) >> 1);
-      x_vel = (x_size / x_counter);
 
       y_counter = y_size / line_size;
       if (y_counter < 0) {

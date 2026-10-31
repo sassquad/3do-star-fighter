@@ -35,7 +35,6 @@ ground_update(void)
   int32_t x_grid, y_grid;
   int32_t x_pos, y_pos, z_pos;
   int32_t type;
-  int32_t loop;
 
   ship_stack *pleb_ship;
 

@@ -27,7 +27,6 @@ draw_land()
 
 {
   int32_t loop, temp_long, height_scaler = 0;
-  int32_t mc_vars[6];
   ship_stack *ship;
   bit_stack *bit;
   smoke_stack *smoke;
@@ -45,7 +44,6 @@ draw_land()
   static char *map_base_adr = (char *) &poly_map[0][0];
 
   graphics_details *object_details = (graphics_details *) static_graphics_adr;
-  graphics_details *ship_details = (graphics_details *) ships_adr;
   graphics_details *details;
 
   // More test stuff

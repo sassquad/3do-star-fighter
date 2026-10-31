@@ -13,7 +13,7 @@ CC      ?= cc
 CFLAGS  ?= -O2 -g
 # armcc's plain 'char' is unsigned; the game relies on that.
 # These flags are required for correctness and are applied even if CFLAGS is given on the command line.
-override CFLAGS += -funsigned-char -fwrapv -fno-strict-aliasing -Wall -Wno-unused-variable -Wno-unused-but-set-variable \
+override CFLAGS += -funsigned-char -fwrapv -fno-strict-aliasing -Wall \
            -Werror=implicit-function-declaration -Wno-misleading-indentation -Wno-parentheses -Wno-unused-function -Isrc
 LDLIBS  += -lm
 # MinGW detection: compiler triplet contains "mingw" (cross or native)

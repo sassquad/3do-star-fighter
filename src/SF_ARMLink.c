@@ -335,7 +335,7 @@ armcol_collisioncheck(intptr_t *stack, void *laserlist, void *shiplist)
   laser_stack *r1 = (laser_stack *) ((linked_list *) laserlist)->start_address;
   ship_stack *r2 = (ship_stack *) ((linked_list *) shiplist)->start_address;
   ship_stack *r10, *r11s;
-  int32_t r3, r4, r5, r6, r7, r8, r9, r14, r11, r12, lim;
+  int32_t r3, r4, r5, r6, r7, r8, r9, r14, r11, lim;
 
 armcol_newship:
   if (r2->header.status != 1) {
@@ -413,7 +413,7 @@ armcol_checknext:
   if (absdiff(r1->z_pos, r5) > r6) {
     goto armcol_next;
   }
-  r12 = (int32_t) 0;
+
   {
     intptr_t owner = r1->who_owns_me;
     if (owner <= 16384) {

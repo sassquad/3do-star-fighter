@@ -51,12 +51,6 @@ rotate_land(void)
   int32_t vert_z; //= ( sine_table [ camera_x_rotation+256 ] * sine_table [
                   //camera_y_rotation ] )>>12 ;
 
-  /* Setup the cosine and sine values of the y rotation for quick access */
-  int32_t cosine_y = cosine_table[camera_y_rotation];
-  int32_t sine_y = -sine_table[camera_y_rotation];
-
-  static int32_t silly = 0;
-
   rot_data = (rot_struct *) (&machine_code_vars[0]);
 
   rot_nodes[0] = 4096;

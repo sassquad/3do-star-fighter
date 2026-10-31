@@ -42,13 +42,9 @@ void
 update_frame(int32_t keypad)
 
 {
-  int32_t loop, temp_long;
+  int32_t temp_long;
   ship_stack *ship;
-  ship_stack *temp_ship;
-  laser_stack *laser;
   int32_t type;
-  int32_t *end_of_collision_stack;
-  intptr_t *start_of_collision_stack = temp_store;
 
   static int32_t test_graphic = 1;
   static int32_t key_press = 0;

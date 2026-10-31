@@ -56,7 +56,6 @@ status_updatestatus(void)
 
 {
   int32_t camloop;
-  char message_string[40];
   ship_stack *ship;
 
   // ARE WE DISPLAYING LIVES ON SCREEN ?

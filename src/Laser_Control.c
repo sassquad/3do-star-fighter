@@ -99,7 +99,7 @@ aim_laser(int32_t x_pos, int32_t y_pos, int32_t z_pos, int32_t x_aim,
   // Given a targets coords it will aim and add the laser
 
   target_struct target;
-  int32_t x_dist, y_dist, z_dist, distance;
+  int32_t distance;
 
   // Find the x & y angle between you and the target
   target.x_pos = x_pos;

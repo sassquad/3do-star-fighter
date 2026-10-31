@@ -350,8 +350,6 @@ pyramid_showmission(void)
 // Returns : Nothing
 
 {
-
-  char string[40];
   int32_t mission_num = return_mission(&pyramids[parameters.level]);
 
   if (pyramids[parameters.level].mission[mission_num] ==

@@ -759,7 +759,7 @@ map_drawtargets(int32_t map_toggle)
 {
 
   int32_t object_loop, item_xpos, item_ypos, item_gridxpos, item_gridypos,
-      checkitem_xpos, checkitem_ypos, item_rememberxpos, item_rememberypos;
+      item_rememberxpos, item_rememberypos;
 
   int32_t distance;
 

@@ -108,7 +108,7 @@ video_play(char *video_file)
   size_t len;
   uint8_t *file;
   video_frame *frames = NULL;
-  int nframes = 0, maxframes = 0, i, status = 0, cur = -1;
+  int nframes = 0, maxframes = 0, status = 0, cur = -1;
   int16_t *pcm = NULL;
   int32_t pcm_samples = 0, pcm_cap = 0;
   int16_t pred[2] = {0, 0};
