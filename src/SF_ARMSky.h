@@ -6,7 +6,7 @@
 
 // Function Prototypes
 
-extern void arm_rendersky (int32_t, int32_t);		// Generate sky celdata for frame
-extern void arm_plotsky (void*);			// Plot sky into temporary list
+extern void arm_rendersky(int32_t, int32_t); // Generate sky celdata for frame
+extern void arm_plotsky(void *);             // Plot sky into temporary list
 
 #endif

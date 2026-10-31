@@ -13,21 +13,20 @@
 
 // Definitions
 
-#define	MENU_FONT		0
-#define	MESSAGE_FONT	0
+#define MENU_FONT 0
+#define MESSAGE_FONT 0
 
 // Externals
 
-extern	message			messages [FONT_MAXMESSAGE];
-extern	ScreenContext*	screen;
-				
+extern message messages[FONT_MAXMESSAGE];
+extern ScreenContext *screen;
+
 // Function Prototypes
 
-int32_t font_loadin (void);										// Load in all fonts & return handles
-void font_initialise (TextCel**);								// Initialise text cels
-void font_terminate (void);										// Unloads all fonts
-void font_paint (int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, char*);	// Paint text to screen
+int32_t font_loadin(void);        // Load in all fonts & return handles
+void font_initialise(TextCel **); // Initialise text cels
+void font_terminate(void);        // Unloads all fonts
+void font_paint(int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+                char *); // Paint text to screen
 
 #endif
-
-

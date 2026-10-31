@@ -3,37 +3,63 @@
 #include "sf_platform.h"
 
 void music_poll(void);
-#define FRAME_MS 17   /* ~60Hz VBL */
+#define FRAME_MS 17 /* ~60Hz VBL */
 static uint32_t vbl_deadline;
 
-Item GetVRAMIOReq(void) { return 1; }
-Item GetVBLIOReq(void)  { return 2; }
-Item GetTimerIOReq(void){ return 3; }
+Item
+GetVRAMIOReq(void)
+{
+  return 1;
+}
 
-void WaitVBL(Item req, int frames)
+Item
+GetVBLIOReq(void)
 {
-	(void)req;
-	plat_pad();   /* pump events */
-	music_poll();
-	if (frames > 0) plat_sleep_ms((uint32_t)frames * FRAME_MS);
-	vbl_deadline = plat_ticks_ms();
+  return 2;
 }
-void WaitVBLDefer(Item req, int frames)
+
+Item
+GetTimerIOReq(void)
 {
-	(void)req;
-	vbl_deadline = plat_ticks_ms() + (uint32_t)frames * FRAME_MS;
+  return 3;
 }
-void WaitIO(Item req)
+
+void
+WaitVBL(Item req, int frames)
 {
-	uint32_t now = plat_ticks_ms();
-	(void)req;
-	plat_pad();
-	music_poll();
-	if ((int32_t)(vbl_deadline - now) > 0) plat_sleep_ms(vbl_deadline - now);
+  (void) req;
+  plat_pad(); /* pump events */
+  music_poll();
+  if (frames > 0) {
+    plat_sleep_ms((uint32_t) frames * FRAME_MS);
+  }
+  vbl_deadline = plat_ticks_ms();
 }
-int GetControlPad(int n, int wait, ControlPadEventData *d)
+
+void
+WaitVBLDefer(Item req, int frames)
 {
-	(void)n; (void)wait;
-	d->cped_ButtonBits = plat_pad();
-	return 0;
+  (void) req;
+  vbl_deadline = plat_ticks_ms() + (uint32_t) frames * FRAME_MS;
+}
+
+void
+WaitIO(Item req)
+{
+  uint32_t now = plat_ticks_ms();
+  (void) req;
+  plat_pad();
+  music_poll();
+  if ((int32_t) (vbl_deadline - now) > 0) {
+    plat_sleep_ms(vbl_deadline - now);
+  }
+}
+
+int
+GetControlPad(int n, int wait, ControlPadEventData *d)
+{
+  (void) n;
+  (void) wait;
+  d->cped_ButtonBits = plat_pad();
+  return 0;
 }

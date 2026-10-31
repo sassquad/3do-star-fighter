@@ -10,11 +10,10 @@
 
 // External Variables
 
-extern	ScreenContext *screen;
+extern ScreenContext *screen;
 
 // Function Prototypes
 
-int32_t video_play (char *video_file);					// Play a Cinepak video sequence
-
+int32_t video_play(char *video_file); // Play a Cinepak video sequence
 
 #endif

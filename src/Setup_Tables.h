@@ -3,8 +3,8 @@
 // THIS WILL CHANGE ALL THE MISSION SAM RATINGS
 
 // SET THE SAM RATE - E.G.	1024 IS NORMAL
-// 							512 = HALF THE NUMBER OF SAMS
-// 							2048 = DOUBLE THE FIRE RATE
+// 							512 = HALF THE NUMBER OF
+// SAMS 							2048 = DOUBLE THE FIRE RATE
 
 // I HAVE SET THIS LOWER BECAUSE HAVING PLAYED IT I FELT THERE WERE TOO MANY
 
@@ -14,99 +14,97 @@
 
 #define LASER_FIRE_RATE 800
 
-// NOTE THESE SETTING WILL ONLY CHANGE THE FIRE RATE FOR ALL GROUND OBJECTS ON ALL MISSIONS
-
+// NOTE THESE SETTING WILL ONLY CHANGE THE FIRE RATE FOR ALL GROUND OBJECTS ON
+// ALL MISSIONS
 
 #include "Ship_Struct.h"
 #include "SF_Celutils.h"
 #include "Camera_Struct.h"
 #include "SF_Mission.h"
 
-#define COLL_UP_RIGHT	248
-#define COLL_UP			249
-#define COLL_UP_LEFT	250
-#define COLL_LEFT		251
-#define COLL_DOWN_LEFT	252
-#define COLL_DOWN		253
-#define COLL_DOWN_RIGHT	254
-#define COLL_RIGHT		255
+#define COLL_UP_RIGHT 248
+#define COLL_UP 249
+#define COLL_UP_LEFT 250
+#define COLL_LEFT 251
+#define COLL_DOWN_LEFT 252
+#define COLL_DOWN 253
+#define COLL_DOWN_RIGHT 254
+#define COLL_RIGHT 255
 
-extern int32_t cosine_table [ 2048 ];
-extern int32_t pex_table [ 16384 ];
-extern int32_t pex_table_near [ 2048 ] ;
-extern int32_t rotated_coords [ 3200 ] [ 3 ];
+extern int32_t cosine_table[2048];
+extern int32_t pex_table[16384];
+extern int32_t pex_table_near[2048];
+extern int32_t rotated_coords[3200][3];
 
-extern char height_map [ 256 ] [ 256 ];
-extern char sprite_map [ 256 ] [ 256 ];
-extern char poly_map [ 128 ] [ 128 ];
+extern char height_map[256][256];
+extern char sprite_map[256][256];
+extern char poly_map[128][128];
 
-extern int32_t screen_coords [ 3200 ] [ 2 ];
-extern int32_t graphic_rotated_coords [ 256 ] [ 4 ] ;
-extern int32_t graphic_screen_coords [ 256 ] [ 2 ] ;
-extern int32_t quick_height_table [ 256 ] [ 4 ] ;
-extern char collision_map [ 128 ] [ 128 ] ;
+extern int32_t screen_coords[3200][2];
+extern int32_t graphic_rotated_coords[256][4];
+extern int32_t graphic_screen_coords[256][2];
+extern int32_t quick_height_table[256][4];
+extern char collision_map[128][128];
 
 // Camera Stuff
-extern ship_stack* ship_viewed_last_frame ;
-extern int32_t ship_viewed_last_frame_x_rot ;
+extern ship_stack *ship_viewed_last_frame;
+extern int32_t ship_viewed_last_frame_x_rot;
 
-extern int32_t camera_x_velocity ;
-extern int32_t camera_y_velocity ;
-extern int32_t camera_z_velocity ;
+extern int32_t camera_x_velocity;
+extern int32_t camera_y_velocity;
+extern int32_t camera_z_velocity;
 
 #include "Misc_Struct.h"
-extern docking_struct docked ;
+extern docking_struct docked;
 
 #include "SF_Mission.h"
-extern mission_data mission ;
+extern mission_data mission;
 
 #include "SF_Status.h"
-extern game_status status ;
+extern game_status status;
 
-extern int32_t star_coords [ 128 ] [ 4 ] ;
+extern int32_t star_coords[128][4];
 
-extern int32_t *sine_table ;
+extern int32_t *sine_table;
 
-extern ship_stack *players_ship ;
+extern ship_stack *players_ship;
 
-extern cel_celdata cel_quad ;
-extern char skyfile [ 1024 ] ;
+extern cel_celdata cel_quad;
+extern char skyfile[1024];
 
-extern ship_list ships ;
-extern camera_data camera [ MAX_CAMERAS ] ;
+extern ship_list ships;
+extern camera_data camera[MAX_CAMERAS];
 
-extern void machine_code_constants(void*);
-extern void plot_land_constants(void*);
+extern void machine_code_constants(void *);
+extern void plot_land_constants(void *);
 
-void setup_tables( void );
+void setup_tables(void);
 
-extern planet_data planet_info ;
+extern planet_data planet_info;
 
-extern int32_t ground_ship_rate ;
-extern int32_t ground_sam_rate ; 
-extern int32_t ground_laser_rate ;
-extern int32_t ground_ship_type ;
-extern int32_t ground_laser_type ;
-extern int32_t air_ship_type ;
+extern int32_t ground_ship_rate;
+extern int32_t ground_sam_rate;
+extern int32_t ground_laser_rate;
+extern int32_t ground_ship_type;
+extern int32_t ground_laser_type;
+extern int32_t air_ship_type;
 
-extern int32_t test_mode ;
+extern int32_t test_mode;
 
-extern int32_t are_we_in_space_or_wot ;
+extern int32_t are_we_in_space_or_wot;
 
-extern int32_t planet_1_x_pos ;
-extern int32_t planet_1_y_pos ;
-extern int32_t planet_1_z_pos ;
+extern int32_t planet_1_x_pos;
+extern int32_t planet_1_y_pos;
+extern int32_t planet_1_z_pos;
 
-extern int32_t planet_2_x_pos ;
-extern int32_t planet_2_y_pos ;
-extern int32_t planet_2_z_pos ;
+extern int32_t planet_2_x_pos;
+extern int32_t planet_2_y_pos;
+extern int32_t planet_2_z_pos;
 
-extern bonus_crystal_object_struct bonus_crystal_object ;
+extern bonus_crystal_object_struct bonus_crystal_object;
 
-extern int32_t which_graphics_set ;
+extern int32_t which_graphics_set;
 
-extern int32_t players_x_control ;
-extern int32_t players_y_control ;
-extern int32_t players_thrust_control ;
-
-
+extern int32_t players_x_control;
+extern int32_t players_y_control;
+extern int32_t players_thrust_control;
