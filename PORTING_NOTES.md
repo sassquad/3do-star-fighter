@@ -127,7 +127,10 @@ Performance is untested on realistic scenes (float per-texel quads).
 * Several asm quirks were reproduced rather than "fixed", e.g. `SF_ARMBurn` uses sub-row word 0 for the even
   map row whereas `arm_generatemaps` uses word 8.
 * Text resources shipped with LF line endings; the parser accepts both LF and CR.
-* The 3DO controller broker/ProStick thread was removed; a keyboard/gamepad drives the pad bits.
+* The 3DO controller broker/ProStick thread was removed; a keyboard/gamepad drives the pad bits. The
+  keyboard layout comes from `config.txt` in the current directory (`sf_keyconfig.c`), written with
+  the defaults if missing; invalid keys or a key used for two controls stop the game with a list of
+  the problems.
   `plat_stick` returns a centred stick (no analogue support yet).
 
 ## 7. Suggested next steps

@@ -28,8 +28,14 @@ Plain GNU Make; no CMake.
 
     ./starfighter /path/to/SF_Resources          # or set SF_RESOURCES, or run from a dir containing SF_Resources/
 
-Keys: arrows = D-pad, Z/Ctrl = A, X/Alt = B, C = C, Enter/Space = Start, Esc/Backspace = X (stop),
-A/S = left/right shift. A game controller works too. If audio crashes, set `SDL_AUDIODRIVER` (the Windows build defaults to `directsound`). Saves go to `$SF_SAVEDIR`,
+Keys (default): arrows = D-pad, Z/Ctrl = A, X/Alt = B, C = C, Enter/Space = Start, Esc/Backspace = X (stop),
+A/S = left/right shift. The keyboard layout is read from `config.txt` in the directory the game is
+started from; if there is none, the game writes one with the defaults and comments, ready to edit
+(one line per pad control, e.g. `START = Return, Space`; delete it to get the defaults back). Each key
+may be used for one control only; if the file names an unknown key or control, or uses a key for two
+controls (including a built-in key of a control the file does not list), the game lists every problem
+(on the console and in a message box) and exits. A game controller works too and is not affected by
+`config.txt`. If audio crashes, set `SDL_AUDIODRIVER` (the Windows build defaults to `directsound`). Saves go to `$SF_SAVEDIR`,
 else `$XDG_DATA_HOME/starfighter`, else `~/.local/share/starfighter`.
 
 ## Video

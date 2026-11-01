@@ -1,0 +1,47 @@
+# Star Fighter keyboard controls, read from this file when the game starts.
+#
+#   CONTROL = key, key ...
+#
+# CONTROL is one of the 3DO pad controls below.  Keys are named as SDL names
+# them, in any case: Up, Down, Left, Right, A..Z, 0..9, Return, Space, Escape,
+# Backspace, Tab, Left Ctrl, Right Ctrl, Left Shift, Right Shift, Left Alt,
+# Right Alt, Keypad 0..9, Keypad Enter, F1..F12, Comma (for ','), . / ; ' [ ] - =
+# A control with nothing after '=' has no keys.  A control left out of this
+# file keeps its built-in keys.  Delete this file to get the defaults back.
+#
+# What A, B, C, START, X, LS and RS do in flight is set in the game, under
+# Configure > Setup Controls; the notes below give the default setup.
+# A game controller works as well and is not affected by this file.
+
+# pad up: menus up; in flight, nose down
+UP    = K
+
+# pad down: menus down; in flight, nose up
+DOWN  = M
+
+# pad left: roll left
+LEFT  = Z
+
+# pad right: roll right
+RIGHT = X
+
+# select; in flight (default setup) thrust
+A     = Space
+
+# in flight (default setup) ECM
+B     = S
+
+# in flight (default setup) change camera
+C     = D
+
+# start; in flight (default setup) map
+START = J
+
+# stop / back; in flight (default setup) pause menu
+X     = P
+
+# left shift; in flight (default setup) select weapon
+LS    = A
+
+# right shift; in flight (default setup) fire
+RS    = L

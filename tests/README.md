@@ -29,7 +29,7 @@ The exit status is non-zero if anything failed.
 | `unit/...` | C unit tests in `tests/unit/` (below), each case reported separately |
 | `scenario/...` | scripted runs of the headless game (below): runs to the end, no sanitizer report, behavioural expectations, frames and audio identical to the goldens |
 | `determinism` | two scenarios re-run twice more with address randomisation on: frames, state log and audio must be identical (this is how the uninitialised explosion smoke was found) |
-| `sdl` | the real SDL build with `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy`: boots, takes scripted input, starts a mission |
+| `sdl` | the real SDL build with `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy` (run in its own folder): boots, takes scripted input, starts a mission; writes the default `config.txt`, loads a valid edited one, and refuses (exit 1, every problem listed) one with invalid or shared keys |
 
 ## Unit tests (`tests/unit/test_*.c`)
 
@@ -57,6 +57,7 @@ Each file is one program built against `libsfcore.a` (the whole game with `main`
 | `test_audio.c` | every sample, voice length and pitch, panning and volume, music stream, channel guards (regression); uses a stub platform |
 | `test_weapons.c` | SAM owners keep 64-bit pointers (regression: attract-mode crash) |
 | `test_bonus.c` | ship damage for every rating (regression: negative shift) |
+| `test_keyconfig.c` | `config.txt` keyboard layout: replacing and adding keys, unbinding, case/spacing/CRLF, `Comma`, mistakes reported by line, the 64-key limit, keys used for two controls (with a built-in key, between lines, three ways), the written default file reads back |
 | `test_testhooks.c` | script parsing and errors, unlimited events, recording and replay, frame limit, hashes, state log, WAV capture |
 
 Several tests only show a regression as a memory error, so run `make test-asan` after touching the

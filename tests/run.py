@@ -876,12 +876,13 @@ def sdl_smoke(binary, res, results):
                      'SF_HASH': os.path.join(rundir, 'frames.txt'),
                      'SF_SAVEDIR': os.path.join(rundir, 'save')})
     t0 = time.time()
-    try:
-        rc, out, err = run([binary, res], env=env, timeout=300)
+    try:  # run in its own folder: the game writes config.txt into the current directory
+        rc, out, err = run([binary, res], cwd=rundir, env=env, timeout=300)
     except subprocess.TimeoutExpired:
         rc, out, err = None, '', 'timed out'
     secs = time.time() - t0
     rows = read_state(os.path.join(rundir, 'state.tsv'))
+    keys_file_check(binary, res, rundir, err, results)
     if rc != 0 or 'max frames reached' not in err:
         results.add(Result('sdl', 'runs with dummy drivers to frame %d' % frames, FAIL,
                            'exit %s\n%s' % (rc, err[-2000:]), secs))
@@ -893,6 +894,43 @@ def sdl_smoke(binary, res, results):
                        'menus seen: %s' % sorted(menus)))
     results.add(Result('sdl', 'scripted input starts a mission', PASS if flying else FAIL,
                        '' if flying else 'never in flight (status 1); menus seen: %s' % sorted(menus)))
+
+
+def keys_file_check(binary, res, rundir, first_err, results):
+    """config.txt: written with the defaults on the first run; a valid edit is loaded; invalid keys
+    or a key used for two controls are all reported and the game exits."""
+    path = os.path.join(rundir, 'config.txt')
+    try:
+        with open(path) as f:
+            text = f.read()
+    except OSError:
+        text = ''
+    ok = 'keys: wrote' in first_err and all(
+        re.search(r'(?m)^%s\s*=' % c, text) for c in ('UP', 'DOWN', 'A', 'START', 'X', 'LS', 'RS'))
+    results.add(Result('sdl', 'writes the default keyboard layout to config.txt', PASS if ok else FAIL,
+                       '' if ok else 'stderr: %s\nconfig.txt:\n%s' % (first_err[-500:], text[:800])))
+    env = clean_env({'SDL_VIDEODRIVER': 'dummy', 'SDL_AUDIODRIVER': 'dummy', 'SF_MAXFRAMES': '5',
+                     'SF_SAVEDIR': os.path.join(rundir, 'save')})
+
+    def run_with(text):
+        with open(path, 'w') as f:
+            f.write(text)
+        try:
+            return run([binary, res], cwd=rundir, env=env, timeout=120)[::2]
+        except subprocess.TimeoutExpired:
+            return None, 'timed out'
+
+    rc, err = run_with('# edited\nSTART = Return\nLS = Q, W\n')
+    ok = rc == 0 and 'keys: loaded config.txt' in err
+    results.add(Result('sdl', 'reads a valid edited config.txt', PASS if ok else FAIL,
+                       '' if ok else 'exit %s\n%s' % (rc, err[-1000:])))
+    rc, err = run_with('# edited\nSTART = A\nfire = G\nRS = NoSuchKey\n')
+    wanted = ['config.txt:3: unknown control', 'config.txt:4: unknown key name',
+              "key 'A' is used for both START (line 2) and LS", 'config.txt has 3 problems']
+    ok = rc == 1 and all(w in err for w in wanted) and 'max frames reached' not in err
+    results.add(Result('sdl', 'refuses a config.txt with invalid or shared keys', PASS if ok else FAIL,
+                       '' if ok else 'exit %s (expected 1)\nmissing: %s\n%s'
+                       % (rc, [w for w in wanted if w not in err], err[-1000:])))
 
 
 # --------------------------------------------------------------------------------------------------

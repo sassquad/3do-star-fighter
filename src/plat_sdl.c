@@ -3,9 +3,14 @@
  * SF_DUMP, SF_HASH, SF_STATE, SF_AUDIO_DUMP, SF_RECORD, SF_WATCHDOG): scripted
  * buttons are ORed with the real input.  With SDL_VIDEODRIVER=dummy and
  * SDL_AUDIODRIVER=dummy the game runs without a display or sound card. Timing
- * is real, so unlike the headless build runs are not frame-exact. */
+ * is real, so unlike the headless build runs are not frame-exact.
+ * The keyboard layout is read from config.txt in the current directory (see
+ * sf_keyconfig.h); if it is missing, one with the defaults is written.  If it
+ * has invalid keys or a key used for two controls, the game lists the
+ * problems and exits. */
 #include "sf_platform.h"
 #include "sf_testhooks.h"
+#include "sf_keyconfig.h"
 /* We keep our own main() (Star3000.c); on Windows tell SDL not to rename it to
  * SDL_main. */
 #define SDL_MAIN_HANDLED
@@ -18,8 +23,8 @@ static SDL_AudioDeviceID adev;
 static plat_audio_cb acb;
 static SDL_GameController *pad_dev;
 static int quit;
-static uint32_t keymask;
 static uint32_t argb[320 * 240];
+static void load_keys(void);
 
 int
 plat_init(void)
@@ -37,6 +42,7 @@ plat_init(void)
     fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
     return 0;
   }
+  load_keys();
   win =
       SDL_CreateWindow("Star Fighter", SDL_WINDOWPOS_CENTERED,
                        SDL_WINDOWPOS_CENTERED, 960, 720, SDL_WINDOW_RESIZABLE);
@@ -115,38 +121,178 @@ plat_sleep_ms(uint32_t ms)
   }
 }
 
-static uint32_t
-keymap(SDL_Keycode k)
+/* ---- keyboard layout: built-in defaults, replaced from config.txt ---- */
+#define KEYS_FILE "config.txt" /* in the directory the game is started from */
+
+static const sf_keybind default_keys[] = {
+    {SDLK_UP, ControlUp},          {SDLK_DOWN, ControlDown},
+    {SDLK_LEFT, ControlLeft},      {SDLK_RIGHT, ControlRight},
+    {SDLK_z, ControlA},            {SDLK_LCTRL, ControlA},
+    {SDLK_x, ControlB},            {SDLK_LALT, ControlB},
+    {SDLK_c, ControlC},            {SDLK_RETURN, ControlStart},
+    {SDLK_SPACE, ControlStart},    {SDLK_ESCAPE, ControlX},
+    {SDLK_BACKSPACE, ControlX},    {SDLK_a, ControlLeftShift},
+    {SDLK_s, ControlRightShift},
+};
+static sf_keybind keys[KEYCFG_MAX];
+static int nkeys;
+static SDL_Keycode held[32]; /* keys currently down */
+static int nheld;
+
+static int32_t
+key_lookup(const char *name)
 {
-  switch (k) {
-    case SDLK_UP:
-      return ControlUp;
-    case SDLK_DOWN:
-      return ControlDown;
-    case SDLK_LEFT:
-      return ControlLeft;
-    case SDLK_RIGHT:
-      return ControlRight;
-    case SDLK_z:
-    case SDLK_LCTRL:
-      return ControlA;
-    case SDLK_x:
-    case SDLK_LALT:
-      return ControlB;
-    case SDLK_c:
-      return ControlC;
-    case SDLK_RETURN:
-    case SDLK_SPACE:
-      return ControlStart;
-    case SDLK_ESCAPE:
-    case SDLK_BACKSPACE:
-      return ControlX;
-    case SDLK_a:
-      return ControlLeftShift;
-    case SDLK_s:
-      return ControlRightShift;
+  SDL_Keycode k = SDL_GetKeyFromName(name);
+  return k == SDLK_UNKNOWN ? -1 : (int32_t) k;
+}
+
+static const char *
+key_name(int32_t key)
+{
+  return SDL_GetKeyName((SDL_Keycode) key);
+}
+
+/* problems found in config.txt, printed as they are found and collected for
+   the message box */
+static char key_problems[2048];
+static int nkey_problems;
+
+static void
+key_problem(const char *msg)
+{
+  size_t len = strlen(key_problems);
+  fprintf(stderr, "%s\n", msg);
+  nkey_problems++;
+  if (len + strlen(msg) + 2 < sizeof key_problems) {
+    snprintf(key_problems + len, sizeof key_problems - len, "%s\n", msg);
   }
-  return 0;
+}
+
+static void
+key_warning(int line, const char *problem, const char *text)
+{
+  char msg[300];
+  snprintf(msg, sizeof msg, "%s:%d: %s: '%s'", KEYS_FILE, line, problem, text);
+  key_problem(msg);
+}
+
+static void
+describe(char *out, size_t n, const sf_keybind *b)
+{
+  if (b->line) {
+    snprintf(out, n, "%s (line %d)", sf_keyconfig_name_for(b->mask), b->line);
+  } else {
+    snprintf(out, n, "%s (its built-in key; list %s in the file to change it)",
+             sf_keyconfig_name_for(b->mask), sf_keyconfig_name_for(b->mask));
+  }
+}
+
+static void
+key_clash(const sf_keybind *a, const sf_keybind *b)
+{
+  char msg[400], da[120], db[120];
+  const sf_keybind *first = (a->line && (!b->line || a->line <= b->line)) ? a : b;
+  const sf_keybind *second = first == a ? b : a;
+  describe(da, sizeof da, first);
+  describe(db, sizeof db, second);
+  snprintf(msg, sizeof msg, "%s: key '%s' is used for both %s and %s", KEYS_FILE,
+           SDL_GetKeyName((SDL_Keycode) a->key), da, db);
+  key_problem(msg);
+}
+
+/* Load the keyboard layout from config.txt; if there is none, write one
+   describing the defaults so it can be edited.  If the file has mistakes
+   (bad lines, unknown controls or keys, a key used for more than one
+   control) they are all listed and the game exits. */
+static void
+load_keys(void)
+{
+  FILE *f;
+  long size;
+  char *text;
+  nkeys = (int) (sizeof default_keys / sizeof *default_keys);
+  memcpy(keys, default_keys, sizeof default_keys);
+  f = fopen(KEYS_FILE, "rb");
+  if (!f) {
+    f = fopen(KEYS_FILE, "w");
+    if (f) {
+      sf_keyconfig_write(f, keys, nkeys, key_name);
+      fclose(f);
+      fprintf(stderr, "keys: wrote the default layout to %s\n", KEYS_FILE);
+    } else {
+      fprintf(stderr, "keys: no %s and cannot create one; using defaults\n",
+              KEYS_FILE);
+    }
+    return;
+  }
+  fseek(f, 0, SEEK_END);
+  size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  text = (char *) malloc((size_t) (size > 0 ? size : 0) + 1);
+  if (!text || size < 0 || fread(text, 1, (size_t) size, f) != (size_t) size) {
+    key_problem(KEYS_FILE ": cannot be read");
+  } else {
+    text[size] = 0;
+    nkeys = sf_keyconfig_parse(text, keys, nkeys, key_lookup, key_warning);
+    sf_keyconfig_check(keys, nkeys, key_clash);
+  }
+  free(text);
+  fclose(f);
+  if (nkey_problems) {
+    char title[64];
+    fprintf(stderr,
+            "%s has %d problem%s; fix %s or delete the file to use the default "
+            "keys\n",
+            KEYS_FILE, nkey_problems, nkey_problems == 1 ? "" : "s",
+            nkey_problems == 1 ? "it" : "them");
+    snprintf(title, sizeof title, "Star Fighter: problems in %s", KEYS_FILE);
+    if (strlen(key_problems) + 80 < sizeof key_problems) {
+      strcat(key_problems, "\nFix the file, or delete it to use the default "
+                           "keys.");
+    }
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, key_problems, NULL);
+    SDL_Quit();
+    exit(1);
+  }
+  fprintf(stderr, "keys: loaded %s\n", KEYS_FILE);
+}
+
+/* pad bits from the keys held down (several keys may drive one control) */
+static uint32_t
+held_mask(void)
+{
+  uint32_t m = 0;
+  int i;
+  for (i = 0; i < nheld; i++) {
+    m |= sf_keyconfig_mask(keys, nkeys, (int32_t) held[i]);
+  }
+  return m;
+}
+
+static void
+key_down(SDL_Keycode k)
+{
+  int i;
+  for (i = 0; i < nheld; i++) {
+    if (held[i] == k) {
+      return;
+    }
+  }
+  if (nheld < (int) (sizeof held / sizeof *held)) {
+    held[nheld++] = k;
+  }
+}
+
+static void
+key_up(SDL_Keycode k)
+{
+  int i;
+  for (i = 0; i < nheld; i++) {
+    if (held[i] == k) {
+      held[i] = held[--nheld];
+      return;
+    }
+  }
 }
 
 uint32_t
@@ -158,14 +304,14 @@ plat_pad(void)
     if (e.type == SDL_QUIT) {
       quit = 1;
     } else if (e.type == SDL_KEYDOWN && !e.key.repeat) {
-      keymask |= keymap(e.key.keysym.sym);
+      key_down(e.key.keysym.sym);
     } else if (e.type == SDL_KEYUP) {
-      keymask &= ~keymap(e.key.keysym.sym);
+      key_up(e.key.keysym.sym);
     } else if (e.type == SDL_CONTROLLERDEVICEADDED && !pad_dev) {
       pad_dev = SDL_GameControllerOpen(e.cdevice.which);
     }
   }
-  m = keymask;
+  m = held_mask();
   if (pad_dev) {
 #define B(b) SDL_GameControllerGetButton(pad_dev, b)
     if (B(SDL_CONTROLLER_BUTTON_DPAD_UP)) {
