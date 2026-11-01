@@ -1,5 +1,11 @@
-/* plat_sdl.c - SDL2 back end: window, keyboard/gamepad, audio device, timing */
+/* plat_sdl.c - SDL2 back end: window, keyboard/gamepad, audio device, timing
+ * The test hooks in sf_testhooks.c work here too (SF_SCRIPT, SF_MAXFRAMES,
+ * SF_DUMP, SF_HASH, SF_STATE, SF_AUDIO_DUMP, SF_RECORD, SF_WATCHDOG): scripted
+ * buttons are ORed with the real input.  With SDL_VIDEODRIVER=dummy and
+ * SDL_AUDIODRIVER=dummy the game runs without a display or sound card. Timing
+ * is real, so unlike the headless build runs are not frame-exact. */
 #include "sf_platform.h"
+#include "sf_testhooks.h"
 /* We keep our own main() (Star3000.c); on Windows tell SDL not to rename it to
  * SDL_main. */
 #define SDL_MAIN_HANDLED
@@ -19,6 +25,8 @@ int
 plat_init(void)
 {
   SDL_SetMainReady();
+  th_init();
+  th_set_exit_hook(plat_audio_close);
 #ifdef _WIN32
   /* The default WASAPI backend crashes inside SDL2.dll on some 32-bit MinGW
      setups; DirectSound is reliable. A user-set SDL_AUDIODRIVER still wins. */
@@ -73,6 +81,7 @@ void
 plat_present(const uint16_t *fb, int br)
 {
   int i;
+  th_frame(fb, br, SDL_GetTicks());
   for (i = 0; i < 320 * 240; i++) {
     uint32_t v = fb[i], r = ((v >> 10) & 31) << 3, g = ((v >> 5) & 31) << 3,
              b = (v & 31) << 3;
@@ -213,7 +222,8 @@ plat_pad(void)
   if (quit) {
     exit(0);
   }
-  return m;
+  th_record_pad(m, SDL_GetTicks());
+  return m | th_script_pad(SDL_GetTicks());
 }
 
 void
@@ -270,6 +280,7 @@ sf_sdl_audio_trampoline(void *ud, Uint8 *stream, int len)
   (void) ud;
   if (acb) {
     acb((int16_t *) stream, len / 4);
+    th_audio((const int16_t *) stream, len / 4);
   } else {
     SDL_memset(stream, 0, len);
   }

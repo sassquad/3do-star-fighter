@@ -38,4 +38,4 @@ void add_air_to_air(ship_stack *, ship_stack *);
 void add_mine(ship_stack *);
 void add_wing_pod(ship_stack *);
 
-void add_sam(int32_t, int32_t, int32_t, ship_stack *, int32_t);
+void add_sam(int32_t, int32_t, int32_t, ship_stack *, intptr_t);

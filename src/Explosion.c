@@ -1833,7 +1833,11 @@ explode_ship_from_collision_box(ship_stack *ship, int32_t explosion_velocity,
   int32_t x_size, y_size, z_size, size = 0;
   int32_t bit_size, line_size;
   int32_t too_many;
-  rotate_node node_data;
+  /* Zeroed: the smoke and bonus calls below use node_data's position under
+     their own random test, so on the first pass it may not have been set by
+     the add_bit branch yet (uninitialised stack memory, found by valgrind
+     via the crash scenario's frames differing between runs). */
+  rotate_node node_data = {0};
 
   int32_t x_start, y_start, z_start;
   int32_t x_pos_exp, y_pos_exp, z_pos_exp;

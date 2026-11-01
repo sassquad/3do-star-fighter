@@ -1,0 +1,31 @@
+# In flight: thrust, lasers (RS), switch weapon (LS) and fire missiles, change camera (C),
+# open and close the map (START), open and close the pause menu (X).
+description: lasers, weapon switch + missiles, camera, map, pause menu
+suite: quick
+frames: 2000
+expect: max(col('lasers', 1100, 1200)) > 0
+expect: at(1199)['weapon'] == 0 and at(1230)['weapon'] == 1
+expect: max(col('ships', 1225, 1300)) > at(1219)['ships']
+expect: max(col('bits', 1240, 1320)) > 0
+expect: ever('camera', 2, 1300, 1400) and at(1450)['camera'] == 1
+expect: all(m == 2 for m in col('menu', 1710, 1800)) and at(1850)['menu'] == -1
+expect: last['shields'] == 64 and last['status'] == 1
+script:
+300 304 DOWN
+330 336 A
+480 486 A
+600 606 A
+760 766 A
+1000 1300 A
+1100 1104 RS
+1120 1124 RS
+1140 1144 RS
+1200 1204 LS
+1220 1224 RS
+1240 1244 RS
+1300 1304 C
+1400 1404 C
+1500 1504 START
+1600 1604 START
+1700 1704 X
+1800 1804 X

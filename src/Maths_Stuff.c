@@ -22,7 +22,13 @@ static int32_t camera_rotations[9];
 static void
 rot_pair(int32_t *a, int32_t *b, int32_t ang)
 {
-  int32_t c = cosine_table[ang], s = cosine_table[ang + SINOFF];
+  int32_t c, s;
+  /* Angles are 0..1023 (a full turn); wrap anything outside, e.g. the -1 a
+     demo ship's negative y rotation gives, which read cosine_table[-1]
+     (found by ASan in the attract-mode demo). */
+  ang &= 1023;
+  c = cosine_table[ang];
+  s = cosine_table[ang + SINOFF];
   int32_t na = ASR(MULS(*a, c), 12) - ASR(MULS(*b, s), 12);
   int32_t nb = ASR(MULS(*a, s), 12) + ASR(MULS(*b, c), 12);
   *a = na;

@@ -1,0 +1,9 @@
+# Warnings clang reports in the existing game code (gcc -Wall reports none).  The clang build check
+# fails if any file/warning pair appears more often than listed here.  Format: FILE -WFLAG COUNT
+#
+# Calls through function pointers declared without a prototype, e.g. typedef void (*MenuFunction)();
+# (not valid C23; harmless today)
+SF_Bonus.c -Wdeprecated-non-prototype 2
+SF_Menu.c -Wdeprecated-non-prototype 2
+# section_data is assigned but never read in setup_tables
+Setup_Tables.c -Wunused-but-set-variable 1

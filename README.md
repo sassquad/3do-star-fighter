@@ -42,10 +42,17 @@ aliases, so a video is only played if a file with the name the game asks for exi
 A video ends when it finishes or when you *newly* press a button (a button already held when the video
 starts is ignored until released).
 
-## Testing without a display
+## Testing
 
-    tools/headless-smoke.sh /path/to/SF_Resources /tmp/out
+    make test            # build checks, unit tests, scripted scenarios vs goldens, SDL smoke (~2 min)
+    make test-asan       # the same under AddressSanitizer + UBSan
+    make test-full       # everything, including the long scenarios (~6 min)
 
-Environment for `plat_null.c`: `SF_DUMP=dir`, `SF_DUMP_EVERY=n`, `SF_SCRIPT=file`
-(lines `first_frame last_frame BUTTON[+BUTTON]`), `SF_MAXFRAMES=n`, `SF_WATCHDOG=seconds`
-(prints a backtrace if the game hangs), `SF_TRACE_PAD=1`.
+Needs Python 3 and `SF_Resources` (`RES=/path/to/SF_Resources`); see `tests/README.md`.
+
+Both builds read test settings from the environment (`src/sf_testhooks.h`): `SF_SCRIPT=file`
+(lines `first_tick last_tick BUTTON[+BUTTON]`), `SF_MAXFRAMES=n`, `SF_DUMP=dir`, `SF_DUMP_EVERY=n`,
+`SF_HASH=file`, `SF_STATE=file`, `SF_AUDIO_DUMP=file.wav`, `SF_RECORD=file` (record your own play as
+a script), `SF_WATCHDOG=seconds` (prints a backtrace if the game hangs), `SF_TRACE_PAD=1`. The
+headless build (`make HEADLESS=1`) runs on a virtual clock and is fully deterministic;
+`tools/headless-smoke.sh /path/to/SF_Resources /tmp/out` dumps frames of a short session.

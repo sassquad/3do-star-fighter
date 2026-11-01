@@ -1,0 +1,30 @@
+# Configure -> Sound -> back, Controls -> back, toggle video clips, back to main;
+# NEW GAME -> mission select -> back, and again.
+description: configure, sound and controls menus, video toggle, mission select and back
+suite: full
+frames: 1800
+expect: in_order(seq('menu'), [0, 11, 7, 11, 12, 11, 0, 5, 0, 5, 0])
+expect: saved('SFC_StarFighter.Config')
+script:
+300 304 DOWN
+330 336 A
+500 504 DOWN
+520 524 DOWN
+540 544 DOWN
+560 564 DOWN
+580 584 A
+700 704 A
+800 804 X
+900 904 DOWN
+920 924 A
+1020 1024 X
+1100 1104 DOWN
+1120 1124 A
+1220 1224 X
+1300 1304 DOWN
+1320 1324 A
+1420 1424 X
+1500 1504 DOWN
+1520 1524 A
+1620 1624 X
+1700 1704 X

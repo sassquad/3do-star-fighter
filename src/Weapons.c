@@ -294,7 +294,8 @@ add_air_to_air(ship_stack *ship, ship_stack *target)
 
 void
 add_sam(int32_t x_pos, int32_t y_pos, int32_t z_pos, ship_stack *target,
-        int32_t object_ref)
+        intptr_t object_ref) /* ground object grid ref, or the launching big
+                                ship's pointer: must not be cut to 32 bits */
 {
 
   // Adds a sam (surface to air) missile from give x,y,z

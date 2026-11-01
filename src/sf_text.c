@@ -322,8 +322,14 @@ alloc_text_celdata(TextCel *t, int32_t w, int32_t h)
   row_woffset = row_bytes / 4 - 2;
 
   n = (size_t) h * row_bytes;
-  bytes = (uint8_t *) calloc(1, n);
-  words = (uint32_t *) calloc(1, n);
+  /* The pixel buffers are padded with TEXTCEL_PAD zero bytes beyond the cel.
+     The game's typewriter reveal (SF_Control.c, SF_Message.c) sets the PRE1
+     pixel count up to ccb_Width, i.e. one pixel more than the row holds; on
+     the last row the cel engine then reads past the cel data (harmless on the
+     3DO, a heap overrun here; found by ASan).  tc_size stays the cel size. */
+#define TEXTCEL_PAD 8
+  bytes = (uint8_t *) calloc(1, n + TEXTCEL_PAD);
+  words = (uint32_t *) calloc(1, n + TEXTCEL_PAD);
   if (bytes == NULL || words == NULL) {
     free(bytes);
     free(words);

@@ -1,0 +1,31 @@
+# Load a save that points the training pyramid at mission T/10 (Death planet),
+# start it from mission select, then thrust, fire lasers, switch weapon, fire, change camera.
+description: Death planet: Missions/T/MISS_10 from a save fixture
+suite: full
+frames: 1800
+fixture: T 10
+expect: ever('menu', 9) and ever('menu', 5)
+expect: at(1100)['level'] == 0
+expect: first('status', 1, 1000) is not None
+expect: max(col('lasers', 1300, 1420)) > 0
+expect: ever('weapon', 1, 1430)
+expect: ever('camera', 2, 1550)
+script:
+300 304 DOWN
+330 336 A
+500 504 DOWN
+520 524 DOWN
+540 544 DOWN
+560 564 A
+700 704 A
+900 904 A
+1060 1064 A
+1200 1500 A
+1300 1304 RS
+1340 1344 RS
+1380 1384 RS
+1420 1424 LS
+1460 1464 RS
+1500 1504 RS
+1550 1554 C
+1600 1604 C

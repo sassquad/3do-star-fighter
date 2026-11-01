@@ -31,7 +31,10 @@
 
 #define FONT_MAXAVAILABLE 2 // Max numbers of fonts that can be loaded in
 #define FONT_MAXMENU 20     // Max number of menutext cels allowed
-#define FONT_MAXMESSAGE 8   // Max number of game messages allowed
+#define FONT_MAXMESSAGE                                                        \
+  9 // Max number of game messages allowed.  Was 8, but MESSAGE_DEMO (8)
+    // indexes messages[] in message_add: it wrote past the array in the
+    // attract-mode demo (found by UBSan/ASan).  Drawing still uses slot 7.
 
 #define CEL_MAX32 88 // Max Number of K for 32x32 object textures
 #define CEL_MAX16 40 // Max Number of K for 16x16 landscape textures

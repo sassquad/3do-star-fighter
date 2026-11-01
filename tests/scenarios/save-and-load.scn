@@ -1,0 +1,22 @@
+# SAVE GAME, enter the name "A", save; then LOAD GAME, pick it, arrive at mission select.
+# tests/run.py make-fixtures keeps the save file this writes as tests/fixtures/base.save.
+description: save a game as "A", load it back, reach mission select
+suite: quick
+frames: 1700
+expect: saved('SF#A') and size('SF#A') == 432
+expect: ever('menu', 9)
+expect: first('menu', 5, 1200) is not None
+expect: in_order(seq('menu'), [0, 9, 5])
+script:
+300 304 DOWN
+330 336 A
+500 504 DOWN
+520 524 DOWN
+540 544 A
+900 904 A
+940 944 START
+1100 1104 DOWN
+1120 1124 DOWN
+1140 1144 DOWN
+1160 1164 A
+1300 1304 A

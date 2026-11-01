@@ -8,6 +8,7 @@
 #include "SF_Palette.h"
 #include "SF_Sound.h"
 #include "SF_ARMUtils.h"
+#include "arm_ops.h"
 #include "Ship_Struct.h"
 #include "Weapons.h"
 
@@ -600,8 +601,13 @@ bonus_downgrade_ship(int32_t damage_rating)
 
   original_value = *stat_pointer;
   minimum = (stat_todamage <= 6) ? 0 : 1;
+  /* damage_rating can exceed 3 (the comment above notwithstanding), making
+     the shift negative: undefined in C.  armcc compiled this to an ARM
+     register shift, where the bottom byte of (3 - damage_rating) is the shift
+     amount and >= 32 gives 0; ASR() reproduces that (found by UBSan). */
   takeoff = (stat_todamage <= 6)
-                ? arm_randomvalue((*stat_pointer) >> (3 - damage_rating))
+                ? arm_randomvalue(
+                      ASR(*stat_pointer, (uint32_t) (3 - damage_rating)))
                 : damage_rating >> 1;
 
   if (takeoff <= 0 ||

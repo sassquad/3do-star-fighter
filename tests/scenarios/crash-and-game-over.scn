@@ -1,0 +1,18 @@
+# Dive into the ground three times: crash, lose all lives, game over, back to the main menu.
+# Exercises player death (the GPTR(0) segfault in PORTING_NOTES section 9).
+description: crash three times, game over, return to the main menu
+suite: quick
+frames: 1400
+expect: ever('status', 3)
+expect: in_order(seq('lives'), [3, 2, 1, 0])
+expect: ever('status', 5)
+expect: last['menu'] == 0
+expect: max(col('bits')) > 0
+script:
+300 304 DOWN
+330 336 A
+480 486 A
+600 606 A
+760 766 A
+900 1300 A
+950 1300 UP

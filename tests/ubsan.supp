@@ -1,0 +1,4 @@
+# UndefinedBehaviorSanitizer suppressions for known, not yet fixed issues.
+# Each suppressed issue has a "# KNOWN:" line; tests/run.py lists them as warnings in every
+# sanitizer run so they are not forgotten.  Remove both lines when the issue is fixed.
+#

@@ -1,0 +1,8 @@
+# SF_Resources without its Video directory: every video is skipped and the menu comes up at once.
+description: boot with the Video directory missing
+suite: full
+frames: 1500
+resources: no-video
+expect: first('menu', 0) is not None and first('menu', 0) < 1000
+expect: max(col('ships')) == 0
+script:

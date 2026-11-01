@@ -171,7 +171,13 @@ static inline uint32_t
 get_bits(const uint32_t *row, uint32_t bitpos, int n)
 {
   uint32_t wi = bitpos >> 5, off = bitpos & 31;
-  uint64_t win = ((uint64_t) row[wi] << 32) | row[wi + 1];
+  /* Only read the following word if the field actually crosses into it: the
+     last field of a row ends inside the row's final word, and row[wi + 1] may
+     then lie past the end of the cel data (found by ASan on text cels). */
+  uint64_t win = (uint64_t) row[wi] << 32;
+  if (off + (uint32_t) n > 32) {
+    win |= row[wi + 1];
+  }
   return (uint32_t) ((win >> (64 - n - off)) & ((1u << n) - 1));
 }
 

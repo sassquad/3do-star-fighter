@@ -1,0 +1,10 @@
+# No input: Krisalis/StarLogo/Intro videos, Fednet logo, main menu, first high-score table.
+description: idle boot through the videos to the main menu and the high scores
+suite: quick
+frames: 7100
+expect: first('menu', 0) is not None and 4000 < first('menu', 0) < 6000
+expect: ever('menu', 15, first('menu', 0) or 1)
+expect: all(v == 0 for v in col('status'))
+expect: max(col('ships')) == 0
+expect: audio['peak'] > 1000
+script:

@@ -1,0 +1,13 @@
+# No input for 44,000 frames: videos, menu/high-score cycle, the credits (after the 4th high-score
+# table) and then the self-playing demo mission (after the 8th), which ends in game over.
+description: idle until the credits and the attract-mode demo have played
+suite: full
+frames: 44000
+checkpoint: 1000
+audio: no
+watchdog: 900
+expect: ever('menu', 15)
+expect: first('status', 1) is not None and 33000 < first('status', 1) < 38000
+expect: max(col('ships', 35000, 43000)) > 5
+expect: ever('status', 5, 40000)
+script:

@@ -4,6 +4,16 @@
 #   make HEADLESS=1      build ./starfighter-headless (no SDL: frame dumps + scripted input, for testing)
 #   make clean
 #
+# Tests (see tests/README.md; need Python 3 and SF_Resources):
+#   make test            build checks, unit tests, scenarios vs goldens, determinism, SDL smoke  (~2 min)
+#   make test-asan       unit tests and quick scenarios built with AddressSanitizer + UBSan
+#   make test-full       everything, including the long scenarios and the ASan run
+#   make rebless [SCENARIOS="a b"]   re-record goldens after an intentional change
+#   RES=/path/to/SF_Resources selects the resources (default: $$SF_RESOURCES, else ./SF_Resources)
+#
+# Build variables: OBJDIR=dir BINDIR=dir (where objects / binaries go), SAN=address,undefined (sanitizers),
+#   WERROR=1 (warnings are errors), COVERAGE=1 (gcov instrumentation).
+#
 # Windows (MinGW-w64), either natively under MSYS2/MinGW or cross-compiled from Linux:
 #   make CC=x86_64-w64-mingw32-gcc SDL2_PREFIX=/path/to/SDL2/x86_64-w64-mingw32
 #   (SDL2_PREFIX is the SDL2 development package's mingw prefix; it is optional when sdl2-config/pkg-config work,
@@ -31,16 +41,33 @@ else ifeq ($(HEADLESS),1)
 endif
 
 SRCDIR  := src
-OBJDIR  := obj
+OBJDIR  ?= obj
+BINDIR  ?= .
+# Absolute paths, so the dependency files (-MMD) always name the same targets however OBJDIR is
+# given; otherwise a header change can leave stale objects behind.
+override OBJDIR := $(abspath $(OBJDIR))
+override BINDIR := $(abspath $(BINDIR))
+
+ifneq ($(SAN),)
+  override CFLAGS  += -fsanitize=$(SAN) -fno-omit-frame-pointer
+  override LDFLAGS += -fsanitize=$(SAN)
+endif
+ifeq ($(WERROR),1)
+  override CFLAGS += -Werror
+endif
+ifeq ($(COVERAGE),1)
+  override CFLAGS  += --coverage
+  override LDFLAGS += --coverage
+endif
 
 COMMON_SRCS := $(filter-out $(SRCDIR)/plat_sdl.c $(SRCDIR)/plat_null.c, $(wildcard $(SRCDIR)/*.c))
 
 ifeq ($(HEADLESS),1)
   PLAT_SRC := $(SRCDIR)/plat_null.c
-  TARGET   := starfighter-headless$(EXE)
+  TARGET   := $(BINDIR)/starfighter-headless$(EXE)
 else
   PLAT_SRC := $(SRCDIR)/plat_sdl.c
-  TARGET   := starfighter$(EXE)
+  TARGET   := $(BINDIR)/starfighter$(EXE)
   ifneq ($(SDL2_PREFIX),)
     SDL_CFLAGS := -I$(SDL2_PREFIX)/include/SDL2
     SDL_LIBS   := -L$(SDL2_PREFIX)/lib -lSDL2
@@ -67,6 +94,7 @@ DEPS := $(OBJS:.o=.d)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
+	@mkdir -p $(dir $@)
 	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
@@ -75,8 +103,54 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
 
+# ---- unit tests (HEADLESS=1 only) ----------------------------------------------------------------
+# libsfcore.a holds the whole game linked against plat_null, with main() renamed to sf_game_main so
+# that each tests/unit/test_*.c can provide its own main().
+UNIT_SRCS := $(wildcard tests/unit/test_*.c)
+UNITDIR   := $(BINDIR)/unit
+UNIT_BINS := $(patsubst tests/unit/%.c,$(UNITDIR)/%$(EXE),$(UNIT_SRCS))
+LIBCORE   := $(OBJDIR)/libsfcore.a
+
+$(OBJDIR)/Star3000_lib.o: $(SRCDIR)/Star3000.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -Dmain=sf_game_main -MMD -MP -c -o $@ $<
+
+$(LIBCORE): $(filter-out $(OBJDIR)/Star3000.o,$(OBJS)) $(OBJDIR)/Star3000_lib.o
+	rm -f $@
+	$(AR) rcs $@ $^
+
+$(UNITDIR)/%$(EXE): tests/unit/%.c tests/unit/sft.h $(LIBCORE)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itests/unit -MMD -MP -c -o $(UNITDIR)/$*.o $<
+	$(CC) $(LDFLAGS) -o $@ $(UNITDIR)/$*.o $(LIBCORE) $(LDLIBS)
+
+# save-file fixture generator (tests/tools/sf_mksave.c): uses only the game's headers
+$(BINDIR)/tools/sf_mksave$(EXE): tests/tools/sf_mksave.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+unit-tests: $(BINDIR)/tools/sf_mksave$(EXE)
+unit-tests:
+ifneq ($(HEADLESS),1)
+	$(error unit-tests needs HEADLESS=1)
+endif
+unit-tests: $(UNIT_BINS)
+
+-include $(UNIT_BINS:$(EXE)=.d) $(OBJDIR)/Star3000_lib.d
+
+# ---- test entry points (tests/run.py builds its own variants under build/) ----------------------
+PYTHON ?= python3
+RUNTEST = $(PYTHON) tests/run.py $(if $(RES),--resources "$(RES)")
+test:
+	$(RUNTEST) quick
+test-asan:
+	$(RUNTEST) asan
+test-full:
+	$(RUNTEST) full
+rebless:
+	$(RUNTEST) rebless $(SCENARIOS)
+
 clean:
-	rm -rf $(OBJDIR) starfighter starfighter-headless starfighter.exe starfighter-headless.exe
+	rm -rf $(OBJDIR) build starfighter starfighter-headless starfighter.exe starfighter-headless.exe
 
 -include $(DEPS)
-.PHONY: all clean
+.PHONY: all clean unit-tests test test-asan test-full rebless
