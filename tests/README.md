@@ -9,6 +9,7 @@ are optional; the checks that need them are skipped without them.
     make test-full       # everything above, plus every scenario, also under ASan                (~6 min)
     make rebless         # re-record all goldens after an intentional change
     make rebless SCENARIOS="crash-and-game-over weapons-and-views"
+    make test-performance # frames per second of the game engine, per scenario         (~4 min)
 
 `RES=/path/to/SF_Resources` picks the resources (default `$SF_RESOURCES`, else `./SF_Resources`).
 The same commands are available as `tests/run.py quick|asan|full|rebless|make-fixtures|list`, with
@@ -74,6 +75,7 @@ A scenario is a scripted headless run. Example:
     checkpoint: 300               # frames between checkpoint images (default 300)
     audio: yes                    # capture audio and compare it with the golden (default yes)
     golden: yes                   # compare frames with the golden (default yes)
+    performance: yes              # measured by make test-performance (default no)
     expect: max(col('speed', 1300, 1520)) > 1500
     script:
     300 304 DOWN
@@ -155,6 +157,32 @@ format is the game's in-memory `gamefile` struct: if it changes (`GAMEFILE_VERSI
 
 The SDL build runs in real time, so its runs are not frame-exact; `make test` only checks that it
 boots and that scripted input reaches a mission.
+
+## Performance (`make test-performance`)
+
+Runs the scenarios that fly in the 3D game engine (those marked `performance: yes`: the missions,
+`new-game-takeoff`, `weapons-and-views`, `crash-and-game-over`) on the optimised headless build, one
+at a time, with no frame dumps, hashes, state log or audio capture, and prints frames per second:
+
+    scenario                frames   fps(med)  fps(best)    cpu fps  spread
+    new-game-takeoff          2400        220        225        222      5%
+    mission-earth2            1800        195        198        200      3%
+    ...
+    TOTAL                    20200        269        272        271
+
+* `fps(med)` / `fps(best)`: frames / wall-clock time, median and best of the runs.
+* `cpu fps`: frames / CPU time used (median), less affected by other load on the machine.
+* `spread`: slowest run against the fastest.
+
+The headless build never sleeps (its clock is virtual), so this is how fast the engine produces
+frames, not the game's 60 Hz pacing. Each figure covers the whole scenario, including the menus and
+briefing before the mission starts (roughly the first 800-1,100 frames); the rest is in flight.
+`REPEAT=n` sets the runs per scenario (default 3), `ONLY=text` picks scenarios
+(`make test-performance ONLY=mission REPEAT=5`). Results go to `build/test-report/performance.csv` and
+are appended, with a timestamp and the compiler, to `build/performance-history.csv` for comparing
+over time. The command reports figures only; it fails only if a scenario does not run. Timings are
+noisy on shared or virtual machines (identical runs varied by up to 2x on one), so compare figures from
+the same machine, preferably idle.
 
 ## Known issues and baselines
 

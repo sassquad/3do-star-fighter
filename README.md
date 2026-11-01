@@ -47,6 +47,7 @@ starts is ignored until released).
     make test            # build checks, unit tests, scripted scenarios vs goldens, SDL smoke (~2 min)
     make test-asan       # the same under AddressSanitizer + UBSan
     make test-full       # everything, including the long scenarios (~6 min)
+    make test-performance  # frames per second of the game engine, per scenario
 
 Needs Python 3 and `SF_Resources` (`RES=/path/to/SF_Resources`); see `tests/README.md`.
 

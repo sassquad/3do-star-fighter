@@ -3,6 +3,7 @@
 description: Space planet: Missions/T/MISS_8 from a save fixture
 suite: quick
 frames: 1800
+performance: yes
 fixture: T 8
 expect: ever('menu', 9) and ever('menu', 5)
 expect: at(1100)['level'] == 0

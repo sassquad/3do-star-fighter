@@ -3,6 +3,7 @@
 description: Ice planet: Missions/H/MISS_11 from a save fixture
 suite: full
 frames: 1800
+performance: yes
 fixture: H 11
 expect: ever('menu', 9) and ever('menu', 5)
 expect: at(1100)['level'] == 3

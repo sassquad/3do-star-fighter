@@ -3,6 +3,7 @@
 description: lasers, weapon switch + missiles, camera, map, pause menu
 suite: quick
 frames: 2000
+performance: yes
 expect: max(col('lasers', 1100, 1200)) > 0
 expect: at(1199)['weapon'] == 0 and at(1230)['weapon'] == 1
 expect: max(col('ships', 1225, 1300)) > at(1219)['ships']

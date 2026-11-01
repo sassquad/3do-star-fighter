@@ -2,6 +2,7 @@
 description: main menu -> mission select -> briefing -> first mission, thrust and fly
 suite: quick
 frames: 2400
+performance: yes
 expect: in_order(seq('menu'), [0, 5, -1])
 expect: first('status', 1, 700) is not None and first('status', 1, 700) < 900
 expect: at(1300)['y'] != at(1000)['y'] and at(1300)['speed'] == 256

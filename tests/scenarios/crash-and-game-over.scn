@@ -3,6 +3,7 @@
 description: crash three times, game over, return to the main menu
 suite: quick
 frames: 1400
+performance: yes
 expect: ever('status', 3)
 expect: in_order(seq('lives'), [3, 2, 1, 0])
 expect: ever('status', 5)

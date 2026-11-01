@@ -3,6 +3,7 @@
 description: Plastic planet: Missions/T/MISS_4 from a save fixture
 suite: full
 frames: 1800
+performance: yes
 fixture: T 4
 expect: ever('menu', 9) and ever('menu', 5)
 expect: at(1100)['level'] == 0

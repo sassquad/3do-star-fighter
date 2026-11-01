@@ -6,6 +6,7 @@
     tests/run.py [options] full           quick + asan + every scenario (incl. long ones), also under ASan
     tests/run.py [options] rebless [SCENARIO ...]   re-record goldens (all scenarios if none given)
     tests/run.py [options] make-fixtures  re-create tests/fixtures/base.save by playing the save scenario
+    tests/run.py [options] performance    frames per second of the headless build, per scenario
     tests/run.py list                     list scenarios
 
 Options:
@@ -13,6 +14,7 @@ Options:
     --only TEXT       run only checks/scenarios whose name contains TEXT
     -j N              parallel jobs (default: number of CPUs)
     --keep            keep large run files (audio WAVs)
+    --repeat N        performance: runs per scenario (default 3)
 
 Results go to build/test-report/ (index.html, summary.txt, images).  See tests/README.md.
 """
@@ -440,6 +442,7 @@ class Scenario:
         self.description, self.suite, self.frames = '', 'quick', 0
         self.watchdog, self.fixture, self.resources = 300, None, None
         self.checkpoint, self.audio, self.golden = 300, True, True
+        self.performance = False  # measured by 'performance' (plays in the 3D game engine)
         self.expects, self.script = [], []
         in_script = False
         with open(path) as f:
@@ -475,6 +478,8 @@ class Scenario:
                     self.audio = val.lower() in ('yes', 'true', '1')
                 elif key == 'golden':
                     self.golden = val.lower() in ('yes', 'true', '1')
+                elif key == 'performance':
+                    self.performance = val.lower() in ('yes', 'true', '1')
                 elif key == 'expect':
                     self.expects.append((lineno, val))
                 else:
@@ -1078,15 +1083,125 @@ def cmd_make_fixtures(args):
     return 0
 
 
+def perf_run(scn, binary, res, mksave):
+    """One timed run: only the script, frame limit and save directory are set, so no frame dumps,
+    hashes, state log or audio capture add to the time.  Returns (wall s, cpu s) or an error."""
+    import resource
+    rundir = os.path.join(BUILD, 'runs', 'perf', scn.name)
+    shutil.rmtree(rundir, ignore_errors=True)
+    os.makedirs(rundir)
+    savedir = os.path.join(rundir, 'save')
+    err = prepare_savedir(scn, savedir, mksave)
+    if err:
+        return None, err
+    if scn.resources:
+        res = make_resources_view(res, rundir, scn.resources)
+    script = os.path.join(rundir, 'script.txt')
+    with open(script, 'w') as f:
+        f.write('\n'.join(scn.script) + '\n')
+    env = clean_env({'SF_SCRIPT': script, 'SF_MAXFRAMES': str(scn.frames), 'SF_SAVEDIR': savedir,
+                     'SF_WATCHDOG': str(scn.watchdog)})
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    t0 = time.perf_counter()
+    try:
+        rc, out, errtext = run([binary, res], env=env, timeout=scn.watchdog + 60)
+    except subprocess.TimeoutExpired:
+        return None, 'timed out'
+    wall = time.perf_counter() - t0
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    if rc != 0 or 'max frames reached' not in errtext:
+        return None, 'exit %s: %s' % (rc, errtext[-300:])
+    cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+    return (wall, cpu), None
+
+
+def cmd_performance(args):
+    """Frames per second of the headless build (the same optimised build the tests use), for the
+    scenarios marked 'performance: yes' - those that fly in the 3D game engine.  The
+    headless build never sleeps (its clock is virtual), so this is how fast the engine can produce
+    frames.  Scenarios run one at a time; each is repeated and the median and best are shown.
+    Wall-clock time depends on the machine's load, CPU fps (frames / CPU time used) less so."""
+    import statistics
+    res = find_resources(args.resources)
+    results = Results()
+    binary = build('headless', results, args.jobs, unit=True)
+    if not binary:
+        return 1
+    mksave = os.path.join(BUILD, 'headless', 'tools', 'sf_mksave')
+    scns = [s for s in load_scenarios(args.only) if s.performance]
+    if not scns:
+        print('no scenarios marked "performance: yes"%s' % (' matching ' + args.only if args.only else ''))
+        return 1
+    repeat = max(1, args.repeat)
+    print('-- performance: %d scenarios x %d runs, one at a time' % (len(scns), repeat), flush=True)
+    rows, failed = [], 0
+    hdr = '%-22s %7s %10s %10s %10s %7s' % ('scenario', 'frames', 'fps(med)', 'fps(best)', 'cpu fps',
+                                            'spread')
+    print(hdr)
+    for scn in scns:
+        walls, cpus, err = [], [], None
+        for _ in range(repeat):
+            t, err = perf_run(scn, binary, res, mksave)
+            if t is None:
+                break
+            walls.append(t[0])
+            cpus.append(t[1])
+        if err:
+            print('%-22s FAILED: %s' % (scn.name, err.strip().splitlines()[0] if err.strip() else err))
+            failed += 1
+            continue
+        med, best, cmed = statistics.median(walls), min(walls), statistics.median(cpus)
+        row = dict(scenario=scn.name, frames=scn.frames, fps_median=scn.frames / med,
+                   fps_best=scn.frames / best, cpu_fps=scn.frames / cmed if cmed else 0.0,
+                   spread=100.0 * (max(walls) - best) / best, wall_median=med, cpu_median=cmed)
+        rows.append(row)
+        print('%-22s %7d %10.0f %10.0f %10.0f %6.0f%%' % (scn.name, scn.frames, row['fps_median'],
+                                                         row['fps_best'], row['cpu_fps'], row['spread']),
+              flush=True)
+    if rows:
+        frames = sum(r['frames'] for r in rows)
+        total = dict(scenario='TOTAL', frames=frames,
+                     fps_median=frames / sum(r['wall_median'] for r in rows),
+                     fps_best=frames / sum(r['frames'] / r['fps_best'] for r in rows),
+                     cpu_fps=frames / sum(r['cpu_median'] for r in rows), spread=0.0)
+        print('%-22s %7d %10.0f %10.0f %10.0f' % ('TOTAL', frames, total['fps_median'], total['fps_best'],
+                                                 total['cpu_fps']))
+        rows.append(total)
+        stamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        os.makedirs(REPORT, exist_ok=True)
+        cols = ['scenario', 'frames', 'fps_median', 'fps_best', 'cpu_fps', 'spread']
+        with open(os.path.join(REPORT, 'performance.csv'), 'w') as f:
+            f.write(','.join(cols) + '\n')
+            for r in rows:
+                f.write(','.join(str(round(r[c], 1)) if isinstance(r[c], float) else str(r[c])
+                                 for c in cols) + '\n')
+        hist = os.path.join(BUILD, 'performance-history.csv')
+        new = not os.path.exists(hist)
+        with open(hist, 'a') as f:
+            if new:
+                f.write('time,compiler,repeat,' + ','.join(cols) + '\n')
+            for r in rows:
+                f.write('%s,"%s",%d,' % (stamp, compiler_id(), repeat) +
+                        ','.join(str(round(r[c], 1)) if isinstance(r[c], float) else str(r[c])
+                                 for c in cols) + '\n')
+        print('\nOnly scenarios that fly in the 3D game engine are measured ("performance: yes").')
+        print('fps = frames / time for the whole scenario, including the menus before the mission starts.')
+        print('Wall-clock fps depends on machine load; compare the best or CPU figures between runs.')
+        print('written: %s, appended to %s' % (os.path.join(REPORT, 'performance.csv'), hist))
+    return 1 if failed else 0
+
+
 def main():
     global KEEP
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('command', choices=['quick', 'asan', 'full', 'rebless', 'make-fixtures', 'list'])
+    ap.add_argument('command', choices=['quick', 'asan', 'full', 'rebless', 'make-fixtures', 'list',
+                                        'performance'])
     ap.add_argument('names', nargs='*', help='scenarios (rebless only)')
     ap.add_argument('--resources')
     ap.add_argument('--only')
     ap.add_argument('-j', '--jobs', type=int, default=ncpu())
     ap.add_argument('--keep', action='store_true')
+    ap.add_argument('--repeat', type=int, default=3)
     args = ap.parse_args()
     KEEP = args.keep
     if args.command == 'list':
@@ -1097,6 +1212,8 @@ def main():
         return cmd_rebless(args)
     if args.command == 'make-fixtures':
         return cmd_make_fixtures(args)
+    if args.command == 'performance':
+        return cmd_performance(args)
     return cmd_suite(args.command, args)
 
 

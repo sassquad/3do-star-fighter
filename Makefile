@@ -9,6 +9,7 @@
 #   make test-asan       unit tests and quick scenarios built with AddressSanitizer + UBSan
 #   make test-full       everything, including the long scenarios and the ASan run
 #   make rebless [SCENARIOS="a b"]   re-record goldens after an intentional change
+#   make test-performance [REPEAT=n] [ONLY=text]   frames per second of the game engine (scenarios marked performance: yes)
 #   RES=/path/to/SF_Resources selects the resources (default: $$SF_RESOURCES, else ./SF_Resources)
 #
 # Build variables: OBJDIR=dir BINDIR=dir (where objects / binaries go), SAN=address,undefined (sanitizers),
@@ -148,9 +149,11 @@ test-full:
 	$(RUNTEST) full
 rebless:
 	$(RUNTEST) rebless $(SCENARIOS)
+test-performance:
+	$(RUNTEST) performance $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY))
 
 clean:
 	rm -rf $(OBJDIR) build starfighter starfighter-headless starfighter.exe starfighter-headless.exe
 
 -include $(DEPS)
-.PHONY: all clean unit-tests test test-asan test-full rebless
+.PHONY: all clean unit-tests test test-asan test-full rebless test-performance
