@@ -7,3 +7,4 @@ starfighter
 starfighter-headless
 obj
 build
+__pycache__

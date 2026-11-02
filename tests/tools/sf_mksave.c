@@ -36,8 +36,8 @@ main(int argc, char **argv)
   }
   f = fopen(argv[1], "rb");
   if (!f || fread(&g, 1, sizeof g, f) != sizeof g || fgetc(f) != EOF) {
-    fprintf(stderr, "sf_mksave: %s is not a %zu-byte save file\n", argv[1],
-            sizeof g);
+    fprintf(stderr, "sf_mksave: %s is not a %lu-byte save file\n", argv[1],
+            (unsigned long) sizeof g);
     return 1;
   }
   fclose(f);

@@ -44,10 +44,9 @@ endif
 SRCDIR  := src
 OBJDIR  ?= obj
 BINDIR  ?= .
-# Absolute paths, so the dependency files (-MMD) always name the same targets however OBJDIR is
-# given; otherwise a header change can leave stale objects behind.
-override OBJDIR := $(abspath $(OBJDIR))
-override BINDIR := $(abspath $(BINDIR))
+# Keep OBJDIR / BINDIR relative and spelt the same way between builds: the dependency files (-MMD)
+# name targets as given, and recipes must also work in cmd.exe (mingw32-make), whose mkdir has no
+# -p option and does not accept '/' in paths.
 
 ifneq ($(SAN),)
   override CFLAGS  += -fsanitize=$(SAN) -fno-omit-frame-pointer
@@ -95,8 +94,14 @@ DEPS := $(OBJS:.o=.d)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	@mkdir -p $(dir $@)
 	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
+
+# a separate output directory (test builds) is created like OBJDIR; the default '.' never is
+ifneq ($(BINDIR),.)
+$(TARGET): | $(BINDIR)
+$(BINDIR):
+	mkdir -p $(BINDIR)
+endif
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<

@@ -270,8 +270,9 @@ def compiler_id():
 def build(variant, results, jobs, unit=False):
     makevars, binary = VARIANTS[variant]
     vdir = os.path.join(BUILD, variant)
-    cmd = ['make', '-j%d' % jobs] + makevars + ['OBJDIR=' + os.path.join(vdir, 'obj'),
-                                                  'BINDIR=' + vdir, 'all']
+    rel = os.path.relpath(vdir, ROOT)  # always the same relative spelling (see the Makefile)
+    cmd = ['make', '-j%d' % jobs] + makevars + ['OBJDIR=' + os.path.join(rel, 'obj'),
+                                                  'BINDIR=' + rel, 'all']
     if unit:
         cmd.append('unit-tests')
     if variant == 'clang':
@@ -325,6 +326,46 @@ def check_clang_baseline(warnings, results, secs):
         results.add(Result('build', 'clang', PASS, '', secs))
 
 
+def mingw_build(results, jobs):
+    """The Windows build as made with mingw32-make from cmd.exe: a copy of the sources built with the
+    Makefile's defaults, Windows detection on (OS=Windows_NT) and recipes run through
+    tests/tools/cmd-shell.sh, which gives mkdir cmd.exe's rules.  Needs a MinGW cross compiler
+    ($MINGW_CC, default i686-w64-mingw32-gcc) and SDL2's MinGW development package ($SDL2_MINGW: its
+    i686-w64-mingw32 or x86_64-w64-mingw32 directory)."""
+    cc = os.environ.get('MINGW_CC', 'i686-w64-mingw32-gcc')
+    sdl = os.environ.get('SDL2_MINGW', '')
+    name = 'mingw (%s, cmd.exe rules)' % cc
+    if not which(cc):
+        results.add(Result('build', name, SKIP, 'no MinGW cross compiler; set MINGW_CC'))
+        return
+    if not sdl or not os.path.isdir(os.path.join(sdl, 'include', 'SDL2')):
+        results.add(Result('build', name, SKIP, 'set SDL2_MINGW to the i686-w64-mingw32 (or x86_64) '
+                           'directory of the SDL2 MinGW development package'))
+        return
+    shell = os.path.join(TESTS, 'tools', 'cmd-shell.sh')
+    os.chmod(shell, 0o755)  # may have lost its executable bit (e.g. applied as a patch)
+    tree = os.path.join(BUILD, 'mingw')
+    shutil.rmtree(tree, ignore_errors=True)
+    shutil.copytree(os.path.join(ROOT, 'src'), os.path.join(tree, 'src'))
+    shutil.copy(os.path.join(ROOT, 'Makefile'), tree)
+    cmd = ['make', '-j%d' % jobs, 'SHELL=' + shell,
+           'OS=Windows_NT', 'CC=' + cc, 'SDL2_PREFIX=' + sdl]
+    t0 = time.time()
+    rc, out, err = run(cmd, cwd=tree)
+    secs = time.time() - t0
+    if rc != 0 or not os.path.exists(os.path.join(tree, 'starfighter.exe')):
+        errs = [l for l in (out + err).splitlines() if 'error' in l.lower() or 'incorrect' in l
+                or 'already exists' in l]
+        results.add(Result('build', name, FAIL, '\n'.join(errs[:20]) or (out + err)[-2000:], secs))
+        return
+    rc2, out2, err2 = run(cmd, cwd=tree)
+    if rc2 != 0 or 'Nothing to be done' not in out2 + err2:
+        results.add(Result('build', name, FAIL, 'a second make did not find everything up to date:\n'
+                           + (out2 + err2)[-1500:], secs))
+        return
+    results.add(Result('build', name, PASS, '', secs))
+
+
 def sdl_available():
     for c in (['sdl2-config', '--libs'], ['pkg-config', '--libs', 'sdl2']):
         try:
@@ -338,6 +379,7 @@ def sdl_available():
 def lint_checks(results):
     # 1. the flags the game depends on survive a command-line CFLAGS
     lint = os.path.join(BUILD, 'lint')
+    lint = os.path.relpath(lint, ROOT)
     rc, out, err = run(['make', '-n', '-B', 'HEADLESS=1', 'CFLAGS=-O0', 'OBJDIR=' + lint + '/obj',
                         'BINDIR=' + lint, 'all'])
     compiles = [l for l in out.splitlines() if ' -c ' in l and '.c' in l]
@@ -1018,6 +1060,7 @@ def cmd_suite(suite, args):
             sdl = build('sdl', results, jobs)
         else:
             results.add(Result('build', 'sdl', SKIP, 'SDL2 development files not found'))
+        mingw_build(results, jobs)
         if which('clang'):
             build('clang', results, jobs, unit=True)
         else:

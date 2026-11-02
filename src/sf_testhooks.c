@@ -10,6 +10,7 @@
 #include "Smoke_Struct.h"
 #include <string.h>
 #include <errno.h>
+#include <inttypes.h>
 #ifndef _WIN32
 #include <signal.h>
 #include <unistd.h>
@@ -414,7 +415,7 @@ th_frame(const uint16_t *fb, int br, uint32_t now_ms)
     for (i = 0; i < sizeof rgb; i++) {
       h = (h ^ rgb[i]) * 1099511628211ull;
     }
-    fprintf(hashf, "%u %016llx\n", frames, (unsigned long long) h);
+    fprintf(hashf, "%u %016" PRIx64 "\n", frames, h); /* PRIx64: msvcrt too */
   }
   if (statef) {
     write_state();

@@ -25,7 +25,7 @@ The exit status is non-zero if anything failed.
 | Group | What |
 |---|---|
 | `lint` | the flags the game needs (`-funsigned-char -fwrapv -fno-strict-aliasing`) are on every compile even with `CFLAGS=` on the command line; no 32-bit casts into the owner pointer fields; no implicit 64->32 bit narrowing (clang `-Wshorten-64-to-32`) apart from four known-safe grid-reference sites |
-| `build` | headless and SDL builds with `-Werror`; a clang build whose warnings are compared with `tests/clang-warnings.txt` (fails on new ones); the ASan/UBSan build |
+| `build` | headless and SDL builds with `-Werror`; a clang build whose warnings are compared with `tests/clang-warnings.txt` (fails on new ones); the ASan/UBSan build; the Windows build (below) |
 | `unit/...` | C unit tests in `tests/unit/` (below), each case reported separately |
 | `scenario/...` | scripted runs of the headless game (below): runs to the end, no sanitizer report, behavioural expectations, frames and audio identical to the goldens |
 | `determinism` | two scenarios re-run twice more with address randomisation on: frames, state log and audio must be identical (this is how the uninitialised explosion smoke was found) |
@@ -184,6 +184,20 @@ are appended, with a timestamp and the compiler, to `build/performance-history.c
 over time. The command reports figures only; it fails only if a scenario does not run. Timings are
 noisy on shared or virtual machines (identical runs varied by up to 2x on one), so compare figures from
 the same machine, preferably idle.
+
+## Windows build check
+
+`make test` also builds the Windows version the way `mingw32-make` does from a Windows command prompt:
+a copy of `src/` and the `Makefile` in `build/mingw/`, built with the Makefile's defaults,
+`OS=Windows_NT`, and recipes run by `tests/tools/cmd-shell.sh`, which gives `mkdir` the rules of
+cmd.exe (no `-p`, no `/` in paths, fails if the directory exists). A second `make` must then find
+nothing to do. It needs a MinGW cross compiler and SDL2's MinGW development package, and is skipped
+without them:
+
+    MINGW_CC=i686-w64-mingw32-gcc SDL2_MINGW=/path/to/SDL2-2.30.x/i686-w64-mingw32 make test
+
+Keep Makefile recipes that the default build runs cmd-compatible: relative paths, and `mkdir` only
+for a directory that does not exist yet.
 
 ## Known issues and baselines
 

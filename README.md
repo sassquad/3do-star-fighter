@@ -20,7 +20,9 @@ Windows (MinGW-w64): in an MSYS2 MinGW shell just run `make`. To cross-compile f
     make CC=x86_64-w64-mingw32-gcc SDL2_PREFIX=/path/to/SDL2-x.y.z/x86_64-w64-mingw32
 
 which produces `starfighter.exe` (copy `SDL2.dll` next to it; `WINGUI=1` hides the console window). If audio crashes, set `SDL_AUDIODRIVER` (the Windows build defaults to `directsound`). Saves go to
-`%APPDATA%\starfighter`. This Windows build has not been compiled or run by me: no MinGW toolchain was available here.
+`%APPDATA%\starfighter`. The Windows build is checked by `make test` when a MinGW cross compiler is available (cross-compiled
+for 32- and 64-bit Windows, with recipes run under cmd.exe rules as `mingw32-make` does; see
+`tests/README.md`); it has not been run on Windows by me.
 
 Plain GNU Make; no CMake.
 
