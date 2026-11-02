@@ -97,7 +97,7 @@ load ("word-swapped" model). Consequences:
 ## 5. The cel engine (`sf_cel.c`)
 
 Implements the CCB subset the game uses: PRE0/PRE1 (from CCB or data), coded 1–8 bpp and uncoded 16 bpp,
-packed (RLE) cels, PLUT loading, flips, `SKIPX`, forward-mapped quads (`P = P0 + v·V + u·(H + v·HDD)`),
+packed (RLE) cels, PLUT loading, `BGND`, `SKIPX`, forward-mapped quads (`P = P0 + v·V + u·(H + v·HDD)`),
 and the pixel processor (PIXC) for P-modes 0/1 with MF/DV, second-source (frame buffer or source) and
 halving.
 
@@ -105,8 +105,10 @@ halving.
 cross-checked against the source:
 * PIXC field decode: derived from the shade tables in `SF_ARMCell.s`, whose comments give the intended
   percentages (e.g. "P0 150%", "P1 75%"); my decode reproduces those figures.
-* PRE0 bit 30 = vertical flip (used by the 6-bit map cels). If the landscape comes out upside-down once
-  `Plot_Land` is ported, flip this assumption first.
+* PRE0 bits (now checked against the 3DO Portfolio cel format, `3docel.h`): 31 `LITERAL`, 30 `BGND`
+  (pixels whose value is 000 are drawn rather than transparent), 27:24 `SKIPX`, 15:6 `VCNT`, 4 `LINEAR`,
+  3 `REP8`, 2:0 `BPP`. The preamble has **no flip bits**; the 3DO flips a cel with negative `HDX`/`VDY`,
+  which the quad mapping handles. Bits 31 and 30 were once guessed to be horizontal/vertical flips – see §9.
 * Coded-pixel P-bit: for 6/8 bpp coded cels with PLUTPOS=0 it is the top bit of the pixel code, else
   bit 15 of the PLUT entry. `ACW/ACCW` culling, `USEAV`, `PXOR`, `MARIA` are ignored.
 * Quad filling uses pixel-centre sampling; hardware rounding may differ by a pixel.
@@ -177,6 +179,7 @@ Found by a user report plus AddressSanitizer / UBSan runs and randomised-input r
 | `cosine_table[-1]` read in the demo | a ship's negative y rotation gave angle index -1 in `rot_pair` | angles wrapped with `& 1023` (`Maths_Stuff.c`). Found by ASan |
 | Negative shift in `bonus_downgrade_ship` | damage ratings above 3 made `>> (3 - damage_rating)` negative (undefined in C; armcc emitted an ARM register shift, giving 0) | `ASR()` from `arm_ops.h` (`SF_Bonus.c`). Found by UBSan |
 | `messages[8]` written in the demo (`messages[]` had 8 entries) | `MESSAGE_DEMO` is 8; `message_add` indexes `messages[]` with it before `message_text` redirects drawing to slot 7. The demo's captions now appear | `FONT_MAXMESSAGE` is 9 (`SF_Allocation.h`). Found by UBSan |
+| **Far ground (3rd level of detail) out by a row against the near and mid levels: roads appear to move as they cross the boundary** | `sf_cel.c` read PRE0 bit 30 as "vertical flip". It is really `BGND`, which `arm_addcelfrom512map` sets on every far-ring and flat-ring cel, so each 8x8-unit far cell was drawn upside down: features running along map x were mirrored within the cell (a road at the cell's row k drawn at row 7-k), while features along map y were right, hence "one dimension only". Bit 31 (`LITERAL`) was likewise read as a horizontal flip, mirroring the packed 32x32 polygon textures (`arm_addpolycel32`) left to right | bits 30/31 no longer flip; bit 30 / `CCB_BGND` draw 000 pixels. New unit tests draw a road through a mid cell and a far cell at every row and column and require the same rows (`test_armcell.c`, fail on the old engine). Also fixes the map-screen streaks (§10). Goldens reblessed (frames only; game state and audio unchanged). **Not yet confirmed on the SDL build** |
 
 Testing aids: the regression suite in `tests/` (`make test`, see `tests/README.md`). Scripted input
 (`sf_testhooks.c`, used by both builds) is clocked by presented frames plus time since the last
@@ -186,8 +189,10 @@ A 12,000-frame randomised-button session (menus, mission, pause menu, camera vie
 save) ran without a crash on an optimised build. An ASAN run of the same session is slow (~10 fps) and was
 only completed for the shorter scripted sessions.
 
-## 10. Known visual problem (not fixed)
+## 10. Map-screen streaks (believed fixed)
 
+> Update 2: the far-ground PRE0 fix in §9 (bit 30 is `BGND`, not a vertical flip) removes the horizontal streaks on the map overlay in headless frames, and the header label is readable again. Please confirm on the SDL build.
+>
 > Update: the packed-cel preamble fix in §9 draws many game cels that were previously dropped or shifted, and the map overlay uses the same cels. The streaks described below may be (partly) gone; re-check before investigating further.
 
 On the in-mission **map / briefing overlay screen** (reached in my randomised run while the briefing text

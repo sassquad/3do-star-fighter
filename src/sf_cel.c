@@ -164,6 +164,9 @@ typedef struct {
   int32_t xpos, ypos, hdx, hdy, vdx, vdy, hddx, hddy;
 } CEState;
 
+#define PRE0_LITERAL 0x80000000u /* not needed by this renderer */
+#define PRE0_BGND 0x40000000u    /* 000 pixels are drawn, not transparent */
+
 #define MAXW 1024
 #define MAXH 1024
 
@@ -435,8 +438,8 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
 {
   uint32_t fl = c->ccb_Flags, pre0, pre1;
   const CelData *src = c->ccb_SourcePtr;
-  int bpp, coded, packed, plutpos, force_p = -1, skipx, width, height, hflip,
-                                   vflip, v, u, stride_words = 0;
+  int bpp, coded, packed, plutpos, force_p = -1, skipx, width, height, bgnd;
+  int v, u, stride_words = 0;
   uint32_t rowbuf[MAXW + 8];
   int fbsrc = is_fb_source(src);
   int natural =
@@ -497,8 +500,12 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
   packed = (fl & CCB_PACKED) != 0;
   plutpos = (fl & CCB_PLUTPOS) != 0;
   skipx = (int) ((pre0 >> 24) & 15);
-  hflip = (pre0 >> 31) & 1;
-  vflip = (pre0 >> 30) & 1;
+  /* PRE0 bit 31 is LITERAL and bit 30 is BGND (3DO Portfolio cel format);
+     the preamble has no flip bits - cels are flipped by negative HDX/VDY.
+     These bits were once taken for horizontal/vertical flips, which turned
+     the 6-bit map land cels (far ring) upside down within each cell and
+     mirrored the 32x32 polygon textures. */
+  bgnd = (fl & CCB_BGND) || (pre0 & PRE0_BGND); /* draw 000 pixels */
   height = (int) ((pre0 >> 6) & 0x3ff) + 1;
   width = natural ? 0 : (int) (pre1 & 0x7ff) + 1 - skipx;
   if (bpp == 0 || (!natural && width <= 0) || width > MAXW || height > MAXH) {
@@ -519,7 +526,7 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
     X = st->xpos / 65536.0f;
     Y = st->ypos / 65536.0f;
     for (v = 0; v < height; v++) {
-      int vv = vflip ? height - 1 - v : v;
+      int vv = v;
       float Hx = H0x + vv * Dx, Hy = H0y + vv * Dy;
       float rx = X + vv * Vx, ry = Y + vv * Vy;
       float Hx2 = H0x + (vv + 1) * Dx, Hy2 = H0y + (vv + 1) * Dy;
@@ -541,7 +548,7 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
         rowp += stride_words;
       }
       for (u = 0; u < width; u++) {
-        int uu = hflip ? width - 1 - u : u;
+        int uu = u;
         float px[4], py[4];
         px[0] = rx + uu * Hx;
         py[0] = ry + uu * Hy;
@@ -551,10 +558,10 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
         py[2] = ry2 + (uu + 1) * Hy2;
         px[3] = rx2 + uu * Hx2;
         py[3] = ry2 + uu * Hy2;
-        if (((rowbuf[u] >> 16) & 1) && !(fl & CCB_BGND)) {
+        if (((rowbuf[u] >> 16) & 1) && !bgnd) {
           continue;
         }
-        fill_quad(fb, px, py, rowbuf[u], st->pixc, (fl & CCB_BGND) != 0);
+        fill_quad(fb, px, py, rowbuf[u], st->pixc, bgnd);
       }
     }
   }

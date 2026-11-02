@@ -1,5 +1,6 @@
 /* SF_ARMCell.c: 16x16 ground cels built from 4x4 tiles (with cache) and the
- * 6-bit landscape maps. */
+ * 6-bit landscape maps, and that the mid-ring and far-ring ground cels put a
+ * map feature in the same place (the level-of-detail seam). */
 #include "sft.h"
 #include "sf_compat.h"
 #include "SF_Celutils.h"
@@ -14,6 +15,7 @@ static uint8_t freeslots[256];
 static uint32_t tiles[256 * 4];
 static uint8_t map[256 * 256];
 static uint32_t pal[16];
+static uint32_t m512[512 * 96], m128[128 * 24], m32[32 * 6];
 
 static void
 setup(void)
@@ -96,7 +98,6 @@ TEST(test_add4cel4_cache_hit_reuses_cel)
 }
 
 /* 6-bit maps: unpack independently and compare with the tiles */
-static uint32_t m512[512 * 96], m128[128 * 24], m32[32 * 6];
 
 static uint32_t
 get6(const uint32_t *row, int idx)
@@ -153,12 +154,174 @@ TEST(test_generatemaps_bit_packing)
   }
 }
 
+/* ---- the same ground through two levels of detail ----
+   Mid ring: arm_add4cel4, a 16x16 cel covering 4x4 map units.  Far ring:
+   arm_addcelfrom512map, a 16x16 cel cut from the 512 map covering 8x8 units.
+   Both are drawn at 4 screen pixels per map unit with corners in the order
+   Plot_Land uses (P0 = (x, y), P1 = (x+n, y), P3 = (x, y+n)), so map row Y
+   should land on screen rows 4*(Y - y)..+3 in both.  Regression: PRE0 bit
+   30 (BGND) was taken for a vertical flip, mirroring every far cell. */
+static ScreenContext sc;
+static uint16_t *fb;
+
+#define ORIGIN_X 100 /* screen position of the cell's (x, y) corner */
+#define ORIGIN_Y 40
+
+static void
+corners(int units)
+{
+  int side = units * 4;
+  cq.x_pos0 = ORIGIN_X - 160;
+  cq.y_pos0 = ORIGIN_Y - 120;
+  cq.x_pos1 = cq.x_pos0 + side;
+  cq.y_pos1 = cq.y_pos0;
+  cq.x_pos2 = cq.x_pos0 + side;
+  cq.y_pos2 = cq.y_pos0 + side;
+  cq.x_pos3 = cq.x_pos0;
+  cq.y_pos3 = cq.y_pos0 + side;
+}
+
+/* ground of tile 0 with a one-unit-wide road of tile 1 along map row (or
+   column) 'at' */
+static void
+road_world(int at, int along_x)
+{
+  int x, y, i;
+  setup();
+  for (i = 0; i < 4; i++) {
+    uint32_t grass = 5, road = 27; /* 6-bit pixel values */
+    tiles[0 * 4 + i] = (grass << 26) | (grass << 20) | (grass << 14) | (grass << 8);
+    tiles[1 * 4 + i] = (road << 26) | (road << 20) | (road << 14) | (road << 8);
+  }
+  for (y = 0; y < 256; y++) {
+    for (x = 0; x < 256; x++) {
+      map[x + (y << 8)] = (uint8_t) ((along_x ? y : x) == at);
+    }
+  }
+  for (i = 0; i < 16; i++) { /* PLUT: entry n = a distinct visible colour */
+    pal[i] = ((uint32_t) (0x0421 * (2 * i + 1)) << 16) | (0x0421u * (2 * i + 2));
+  }
+  cq.cel_map512 = (char *) m512;
+  cq.cel_map128 = (char *) m128;
+  cq.cel_map32 = (char *) m32;
+  arm_generatemaps(&cq, map);
+  arm_celinitialisecreation(creation, 257); /* headers for all 256 slots */
+  cq.shade = 8;
+}
+
+static uint16_t grass; /* colour of the ground without the road */
+
+/* screen rows (or columns) 0..side-1 of the cell that differ from the ground */
+static unsigned
+road_lines(int side, int along_x)
+{
+  unsigned lines = 0;
+  int k;
+  for (k = 0; k < side; k++) {
+    int x = ORIGIN_X + (along_x ? side / 2 : k), y = ORIGIN_Y + (along_x ? k : side / 2);
+    if (fb[y * 320 + x] != grass) {
+      lines |= 1u << k;
+    }
+  }
+  return lines;
+}
+
+static unsigned draw_far(int x, int y, int along_x);
+
+/* the ground colour as drawn by a level (a world without the road) */
+static void
+learn_grass(int far)
+{
+  road_world(-100, 1);
+  memset(fb, 0, 320 * 240 * 2);
+  cq.temp_cels = 0;
+  corners(far ? 8 : 4);
+  if (far) {
+    arm_addcelfrom512map(&cq, 8, 16, 0);
+  } else {
+    arm_add4cel4(&cq, map, 8, 16);
+  }
+  ccbs[0].ccb_Flags |= CCB_LAST;
+  DrawCels(sc.sc_BitmapItems[0], &ccbs[0]);
+  grass = fb[(ORIGIN_Y + 2) * 320 + ORIGIN_X + 2];
+}
+
+static unsigned
+draw_mid(int x, int y, int along_x)
+{
+  memset(fb, 0, 320 * 240 * 2);
+  cq.temp_cels = 0;
+  corners(4);
+  arm_add4cel4(&cq, map, x, y);
+  ccbs[0].ccb_Flags |= CCB_LAST;
+  DrawCels(sc.sc_BitmapItems[0], &ccbs[0]);
+  return road_lines(16, along_x);
+}
+
+static unsigned
+draw_far(int x, int y, int along_x)
+{
+  memset(fb, 0, 320 * 240 * 2);
+  cq.temp_cels = 0;
+  corners(8);
+  arm_addcelfrom512map(&cq, x, y, 0);
+  ccbs[0].ccb_Flags |= CCB_LAST;
+  DrawCels(sc.sc_BitmapItems[0], &ccbs[0]);
+  return road_lines(32, along_x);
+}
+
+TEST(test_lod_rings_agree_on_map_rows)
+{
+  int k;
+  for (k = 0; k < 4; k++) { /* road on each row of the mid cell at y = 16 */
+    unsigned want = 0xFu << (4 * k), mid, far;
+    learn_grass(0);
+    road_world(16 + k, 1);
+    mid = draw_mid(8, 16, 1);
+    learn_grass(1);
+    road_world(16 + k, 1);
+    far = draw_far(8, 16, 1) & 0xFFFF; /* the far cell's first 4 units */
+    if (mid != want || far != want) {
+      SFT_FAIL_("road on map row %d: mid rows 0x%04x, far rows 0x%04x, expected 0x%04x",
+                16 + k, mid, far, want);
+    }
+  }
+  learn_grass(1);
+  road_world(16 + 6, 1); /* and in the far cell's second half */
+  CHECK_EQX(draw_far(8, 16, 1), 0xFu << 24);
+}
+
+TEST(test_lod_rings_agree_on_map_columns)
+{
+  int k;
+  for (k = 0; k < 4; k++) {
+    unsigned want = 0xFu << (4 * k), mid, far;
+    learn_grass(0);
+    road_world(8 + k, 0);
+    mid = draw_mid(8, 16, 0);
+    learn_grass(1);
+    road_world(8 + k, 0);
+    far = draw_far(8, 16, 0) & 0xFFFF;
+    if (mid != want || far != want) {
+      SFT_FAIL_("road on map column %d: mid 0x%04x, far 0x%04x, expected 0x%04x",
+                8 + k, mid, far, want);
+    }
+  }
+}
+
 int
 main(void)
 {
   SFT_BEGIN();
+  if (!OpenGraphics(&sc, 2)) {
+    printf("Bail out! OpenGraphics failed\n");
+    return 1;
+  }
+  fb = sc.sc_Bitmaps[0]->bm_Buffer;
   RUN(test_add4cel4_uses_tile_n);
   RUN(test_add4cel4_cache_hit_reuses_cel);
   RUN(test_generatemaps_bit_packing);
+  RUN(test_lod_rings_agree_on_map_rows);
+  RUN(test_lod_rings_agree_on_map_columns);
   return SFT_END();
 }

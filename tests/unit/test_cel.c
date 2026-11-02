@@ -93,29 +93,35 @@ TEST(test_scale_and_flips)
   CHECK_EQX(px(53, 61), 0x2222);
   CHECK_EQX(px(54, 60), 0);
   CHECK_EQX(px(50, 62), 0);
-  clear_fb(0); /* horizontal flip: PRE0 bit 31 */
+  clear_fb(0); /* PRE0 bit 31 is LITERAL, not a horizontal flip */
   setup_ccb(&c, 50, 60, 1);
   set_pre(&c, 6, 0, 2, 1, 2);
   c.ccb_PRE0 |= 1u << 31;
   c.ccb_SourcePtr = (CelData *) data;
   DrawCels(sc.sc_BitmapItems[0], &c);
-  CHECK_EQX(px(50, 60), 0x2222);
-  CHECK_EQX(px(51, 60), 0x1111);
+  CHECK_EQX(px(50, 60), 0x1111);
+  CHECK_EQX(px(51, 60), 0x2222);
 }
 
-TEST(test_vertical_flip)
+/* PRE0 bit 30 is BGND (draw 000 pixels), not a vertical flip: the far land
+   ring sets it, and reading it as a flip turned each far cell upside down */
+TEST(test_pre0_bgnd_not_flip)
 {
-  static uint32_t data[4] = {0x2AAA0000u | 0x0AAA, 0, 0x5555u << 16 | 0x0555,
+  static uint32_t data[4] = {0x2AAA0000u | 0x0AAA, 0, 0x5555u << 16 | 0x0000,
                              0};
   CCB c;
-  clear_fb(0);
+  clear_fb(0x0007);
   setup_ccb(&c, 0, 0, 1);
   set_pre(&c, 6, 0, 2, 2, 2);
-  c.ccb_PRE0 |= 1u << 30; /* inferred: PRE0 bit 30 flips rows */
   c.ccb_SourcePtr = (CelData *) data;
   DrawCels(sc.sc_BitmapItems[0], &c);
-  CHECK_EQX(px(0, 0), 0x5555);
-  CHECK_EQX(px(0, 1), 0x2AAA);
+  CHECK_EQX(px(1, 1), 0x0007); /* 000 is transparent without BGND */
+  clear_fb(0x0007);
+  c.ccb_PRE0 |= 1u << 30;
+  DrawCels(sc.sc_BitmapItems[0], &c);
+  CHECK_EQX(px(0, 0), 0x2AAA); /* rows are not flipped */
+  CHECK_EQX(px(0, 1), 0x5555);
+  CHECK_EQX(px(1, 1), 0x0000); /* ...and the 000 pixel is drawn */
 }
 
 /* PLUT: 32 entries packed two per word, entry 2k in the high half */
@@ -375,7 +381,7 @@ main(void)
   fb = sc.sc_Bitmaps[0]->bm_Buffer;
   RUN(test_uncoded16_unit_scale);
   RUN(test_scale_and_flips);
-  RUN(test_vertical_flip);
+  RUN(test_pre0_bgnd_not_flip);
   RUN(test_coded_depths_use_plut);
   RUN(test_skipx);
   RUN(test_pixc_scale_and_blend);
