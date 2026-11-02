@@ -273,6 +273,14 @@ th_frames(void)
   return frames;
 }
 
+static int last_br = -1;
+
+int
+th_last_brightness(void)
+{
+  return last_br;
+}
+
 uint32_t
 th_tick(uint32_t now_ms)
 {
@@ -392,6 +400,7 @@ th_frame(const uint16_t *fb, int br, uint32_t now_ms)
   static unsigned char rgb[320 * 240 * 3];
   int want_dump;
   frames++;
+  last_br = br;
   t_at_present = now_ms;
   have_present = 1;
   want_dump = dumpdir && (frames % (uint32_t) dump_every) == 0;

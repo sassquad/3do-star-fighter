@@ -218,7 +218,11 @@ sf_mix_voice_active(int ch)
 void
 sf_mix_voice_bend(int ch, int32_t b16)
 {
-  voice[ch].bend = b16 / 65536.0;
+  /* The engine-noise Doppler (Sound_Control.c) can ask for a negative bend:
+     9*1024 + speed terms - up to 12*1024 when a ship pulls away. Playing
+     backwards ran the voice off the start of its sample (ASan, attract demo);
+     a rate can't be negative, so it holds at 0 instead. */
+  voice[ch].bend = b16 > 0 ? b16 / 65536.0 : 0.0;
 }
 
 void

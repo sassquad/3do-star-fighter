@@ -147,6 +147,27 @@ TEST(test_voice_gain_and_pan)
   sf_sample_free(s);
 }
 
+/* a negative pitch bend (engine Doppler as a ship pulls away) must not run
+   the voice backwards off the start of its sample: run under ASan */
+TEST(test_negative_bend_stays_in_sample)
+{
+  sf_sample *s;
+  sft_resources();
+  s = sf_sample_load("Samples/Laser.aiff");
+  REQUIRE(s);
+  REQUIRE(sf_audio_start() && cb);
+  sf_mix_voice_start(2, s, 60, 32768, 32768);
+  pull(100);
+  sf_mix_voice_bend(2, -3 * 1024);
+  pull(4000); /* used to read s->data[-1], [-2]... */
+  CHECK(sf_mix_voice_active(2)); /* held, not ended or wrapped */
+  sf_mix_voice_bend(2, 65536);
+  pull(1000);
+  CHECK(peak(1000, 0) > 0); /* and it carries on once the bend is positive */
+  sf_mix_voice_stop(2);
+  sf_sample_free(s);
+}
+
 TEST(test_music_stream)
 {
   sft_resources();
@@ -190,6 +211,7 @@ main(void)
   RUN(test_all_samples_load);
   RUN(test_voice_plays_for_expected_time);
   RUN(test_voice_gain_and_pan);
+  RUN(test_negative_bend_stays_in_sample);
   RUN(test_music_stream);
   RUN(test_sound_channel_guards);
   return SFT_END();

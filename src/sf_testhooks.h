@@ -44,6 +44,7 @@ void th_audio(const int16_t *pcm, int frames);
 int th_audio_wanted(void);
 /* Number of presented frames so far. */
 uint32_t th_frames(void);
+int th_last_brightness(void); /* brightness of the last present, 0..256 */
 /* Optional function run before th_frame exits the program (e.g. to stop an
    audio thread before the WAV file is finalised). */
 void th_set_exit_hook(void (*fn)(void));

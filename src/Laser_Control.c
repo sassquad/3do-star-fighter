@@ -425,7 +425,16 @@ small_fighter_lasers(ship_stack *ship)
   //3				5 + 6 + 5			16
 
   if ((ship->performance)->weapons[WEAPON_LASER] == 255) {
-    laser_type = (((intptr_t) ship) >> 5) & 7;
+    /* The original used the ship's address, (ship >> 5) & 7, as a fixed
+       per-ship "random" choice. Here the address depends on the build (the
+       sanitizer builds and the 32-bit Windows build differed from Linux), so
+       use the ship's slot in the pool with the 32-bit (3DO) struct size of
+       228 bytes instead: the same choice on every build. */
+    intptr_t slot = ship - ships.ship_item;
+    if (slot < 0 || slot >= MAX_SHIPS) {
+      slot = 0;
+    }
+    laser_type = (int32_t) ((slot * 228) >> 5) & 7;
   } else {
     laser_type = (ship->performance)->weapons[WEAPON_LASER];
   }

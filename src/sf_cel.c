@@ -70,11 +70,18 @@ fb_for_screen(Item si)
   return g_fb[(si - 1) & 1];
 }
 
+/* Display brightness, 0..256. On the 3DO the fades work on the screens'
+   colour tables, which keep their value: after FadeToBlack the next screen
+   shown is still black until FadeFromBlack raises it. Presenting at full
+   brightness here flashed each new picture for a frame before it faded in
+   (Fednet logo, menu background, mission pyramid...). */
+static int g_display_br = 256;
+
 int
 DisplayScreen(Item screenItem, Item unused)
 {
   (void) unused;
-  plat_present(fb_for_screen(screenItem), 256);
+  plat_present(fb_for_screen(screenItem), g_display_br);
   return 0;
 }
 
@@ -142,6 +149,7 @@ FadeToBlack(ScreenContext *sc, int frames)
     plat_present(fb, 256 - 256 * i / frames);
     WaitVBL(0, 1);
   }
+  g_display_br = 0; /* stays black until FadeFromBlack */
 }
 
 void
@@ -153,6 +161,7 @@ FadeFromBlack(ScreenContext *sc, int frames)
     plat_present(fb, 256 * i / frames);
     WaitVBL(0, 1);
   }
+  g_display_br = 256;
 }
 
 /* ------------------------------------------------------------------ */

@@ -4,6 +4,7 @@
  * the latter as a memory error). */
 #include "sft.h"
 #include "sf_compat.h"
+#include "sf_testhooks.h"
 
 static ScreenContext sc;
 static uint16_t *fb;
@@ -370,6 +371,21 @@ TEST(test_clipping_off_screen)
   CHECK_EQX(px(0, 0), 0); /* row -1 is off screen */
 }
 
+/* A fade to black leaves the display black: the next screen shown must not
+   appear at full brightness before FadeFromBlack (it used to flash for one
+   frame on every faded screen change) */
+TEST(test_fade_state_persists_across_display)
+{
+  FadeToBlack(&sc, 4);
+  CHECK_EQ(th_last_brightness(), 0);
+  DisplayScreen(sc.sc_Screens[0], 0); /* the new picture... */
+  CHECK_EQ(th_last_brightness(), 0); /* ...is still black */
+  FadeFromBlack(&sc, 4);
+  CHECK_EQ(th_last_brightness(), 256);
+  DisplayScreen(sc.sc_Screens[1], 0);
+  CHECK_EQ(th_last_brightness(), 256); /* and normal again afterwards */
+}
+
 int
 main(void)
 {
@@ -390,5 +406,6 @@ main(void)
   RUN(test_last_word_not_overread);
   RUN(test_skip_flag_and_list);
   RUN(test_clipping_off_screen);
+  RUN(test_fade_state_persists_across_display);
   return SFT_END();
 }
