@@ -946,7 +946,11 @@ plot_ship(ship_stack *ship)
     setup_static_graphic_ship_rotations(obj);
   }
   shade_style = 1;
-  plot_group_mask = ship->counter;
+  /* explosion pieces (ship and building sections): groups to leave out.
+     The mask lives in group_mask (byte 40); counter (byte 44) once held it,
+     and reading counter - always 0 for a section - drew every piece as the
+     whole object (see Ship_Struct.h) */
+  plot_group_mask = ship->group_mask;
   begin_graphic((type >= 512) ? ships_data : static_graphics_data,
                 (type >= 512) ? type - 512 : type - 256, ship_graphic_rotation,
                 0);
