@@ -3,6 +3,7 @@
 //	General game utility routines
 
 #include "SF_Utility.h"
+#include "sf_video.h"
 #include "SF_Io.h"
 
 /**************************************/
@@ -86,6 +87,6 @@ delay_frames(int32_t frame_count)
 
 {
   while (--frame_count >= 0 && controlpad_read() == 0) {
-    WaitVBL(VBLIOReq, 1);
+    frame_wait(1);
   }
 }

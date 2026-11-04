@@ -251,7 +251,7 @@ video_play(char *video_file)
   free(file);
 
   /* ---- restore ---- */
-  DisplayScreen(screen->sc_Screens[1 - screen->sc_curScreen], 0);
+  video_show(1 - video_back());
   io_resetvideocounter(MAX_WAITBEFOREVIDEO);
   sound_initialise();
   music_resume();

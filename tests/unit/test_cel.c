@@ -4,9 +4,9 @@
  * the latter as a memory error). */
 #include "sft.h"
 #include "sf_compat.h"
+#include "sf_video.h"
 #include "sf_testhooks.h"
 
-static ScreenContext sc;
 static uint16_t *fb;
 
 #define PIXC_IDENTITY 0x1f001f00u
@@ -67,7 +67,7 @@ TEST(test_uncoded16_unit_scale)
   setup_ccb(&c, 10, 20, 1);
   set_pre(&c, 6, 0, 4, 2, 2);
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(10, 20), 0x0005); /* colour 0 is transparent */
   CHECK_EQX(px(11, 20), 0x7c00);
   CHECK_EQX(px(12, 20), 0x03e0);
@@ -87,7 +87,7 @@ TEST(test_scale_and_flips)
   setup_ccb(&c, 50, 60, 2); /* each source pixel covers 2x2 */
   set_pre(&c, 6, 0, 2, 1, 2);
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(50, 60), 0x1111);
   CHECK_EQX(px(51, 61), 0x1111);
   CHECK_EQX(px(52, 60), 0x2222);
@@ -99,7 +99,7 @@ TEST(test_scale_and_flips)
   set_pre(&c, 6, 0, 2, 1, 2);
   c.ccb_PRE0 |= 1u << 31;
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(50, 60), 0x1111);
   CHECK_EQX(px(51, 60), 0x2222);
 }
@@ -115,11 +115,11 @@ TEST(test_pre0_bgnd_not_flip)
   setup_ccb(&c, 0, 0, 1);
   set_pre(&c, 6, 0, 2, 2, 2);
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(1, 1), 0x0007); /* 000 is transparent without BGND */
   clear_fb(0x0007);
   c.ccb_PRE0 |= 1u << 30;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), 0x2AAA); /* rows are not flipped */
   CHECK_EQX(px(0, 1), 0x5555);
   CHECK_EQX(px(1, 1), 0x0000); /* ...and the 000 pixel is drawn */
@@ -161,7 +161,7 @@ TEST(test_coded_depths_use_plut)
     c.ccb_Flags |= CCB_LDPLUT;
     c.ccb_PLUTPtr = plut;
     c.ccb_SourcePtr = (CelData *) data;
-    DrawCels(sc.sc_BitmapItems[0], &c);
+    draw_cels(0, &c);
     for (i = 0; i < n; i++) {
       int v = i > maxv ? maxv : i;
       if ((px(100 + i, 100) & 0x7fff) != 0x0400 + v) {
@@ -181,7 +181,7 @@ TEST(test_skipx)
   set_pre(&c, 6, 0, 3, 1, 2);
   c.ccb_PRE0 |= 1u << 24; /* skip one source pixel */
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), 0x2222);
   CHECK_EQX(px(1, 0), 0x3333);
   CHECK_EQX(px(2, 0), 0);
@@ -198,17 +198,17 @@ TEST(test_pixc_scale_and_blend)
   set_pre(&c, 6, 0, 1, 1, 2);
   c.ccb_SourcePtr = (CelData *) data;
   c.ccb_PIXC = 0x0F000F00u;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), (10 << 10) | (10 << 5) | 10);
   /* plus the frame buffer pixel divided by 2 */
   clear_fb((uint16_t) ((8 << 10) | (8 << 5) | 8));
   c.ccb_PIXC = 0x0F900F90u;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), (14 << 10) | (14 << 5) | 14);
   /* saturates at 31 */
   clear_fb(0x7fff);
   c.ccb_PIXC = 0x1F801F80u; /* MF 8, DV 8, + frame buffer */
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), 0x7fff);
 }
 
@@ -262,7 +262,7 @@ TEST(test_packed_without_ccbpre_has_one_preamble_word)
   setup_ccb(&c, 30, 40, 1);
   c.ccb_Flags = (FLAGS_BASE & ~CCB_CCBPRE) | CCB_PACKED;
   c.ccb_SourcePtr = (CelData *) b.w;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(30, 40), 0x1001);
   CHECK_EQX(px(32, 40), 0x1003);
   CHECK_EQX(px(30, 41), 0x2001);
@@ -291,7 +291,7 @@ TEST(test_packed_transparent_and_repeat)
   c.ccb_Flags |= CCB_PACKED;
   set_pre(&c, 6, 0, 8, 1, 2); /* PRE1 width 8: rest padded transparent */
   c.ccb_SourcePtr = (CelData *) b.w;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), 0x0001);
   CHECK_EQX(px(1, 0), 0x0001);
   CHECK_EQX(px(2, 0), 0x0abc);
@@ -323,7 +323,7 @@ TEST(test_last_word_not_overread)
   c.ccb_Flags |= CCB_LDPLUT;
   c.ccb_PLUTPtr = plut;
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0) & 0x7fff, 0x0101);
   CHECK_EQX(px(3, 0) & 0x7fff, 0x0104);
   CHECK_EQX(px(0, 1) & 0x7fff, 0x0105);
@@ -344,12 +344,12 @@ TEST(test_skip_flag_and_list)
   setup_ccb(&b, 5, 0, 1);
   set_pre(&b, 6, 0, 1, 1, 2);
   b.ccb_SourcePtr = (CelData *) d2;
-  DrawCels(sc.sc_BitmapItems[0], &a);
+  draw_cels(0, &a);
   CHECK_EQX(px(0, 0), 0x1111);
   CHECK_EQX(px(5, 0), 0x2222);
   clear_fb(0);
   a.ccb_Flags |= CCB_SKIP;
-  DrawCels(sc.sc_BitmapItems[0], &a);
+  draw_cels(0, &a);
   CHECK_EQX(px(0, 0), 0);
   CHECK_EQX(px(5, 0), 0x2222);
 }
@@ -362,27 +362,27 @@ TEST(test_clipping_off_screen)
   setup_ccb(&c, 319, 239, 1);
   set_pre(&c, 6, 0, 2, 1, 2);
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c); /* half off the right edge */
+  draw_cels(0, &c); /* half off the right edge */
   CHECK_EQX(px(319, 239), 0x7fff);
   setup_ccb(&c, -1, -1, 1);
   set_pre(&c, 6, 0, 2, 1, 2);
   c.ccb_SourcePtr = (CelData *) data;
-  DrawCels(sc.sc_BitmapItems[0], &c);
+  draw_cels(0, &c);
   CHECK_EQX(px(0, 0), 0); /* row -1 is off screen */
 }
 
 /* A fade to black leaves the display black: the next screen shown must not
-   appear at full brightness before FadeFromBlack (it used to flash for one
+   appear at full brightness before video_fade_in (it used to flash for one
    frame on every faded screen change) */
 TEST(test_fade_state_persists_across_display)
 {
-  FadeToBlack(&sc, 4);
+  video_fade_out(4);
   CHECK_EQ(th_last_brightness(), 0);
-  DisplayScreen(sc.sc_Screens[0], 0); /* the new picture... */
+  video_show(0); /* the new picture... */
   CHECK_EQ(th_last_brightness(), 0); /* ...is still black */
-  FadeFromBlack(&sc, 4);
+  video_fade_in(4);
   CHECK_EQ(th_last_brightness(), 256);
-  DisplayScreen(sc.sc_Screens[1], 0);
+  video_show(1);
   CHECK_EQ(th_last_brightness(), 256); /* and normal again afterwards */
 }
 
@@ -390,11 +390,11 @@ int
 main(void)
 {
   SFT_BEGIN();
-  if (!OpenGraphics(&sc, 2)) {
-    printf("Bail out! OpenGraphics failed\n");
+  if (!video_open()) {
+    printf("Bail out! video_open failed\n");
     return 1;
   }
-  fb = sc.sc_Bitmaps[0]->bm_Buffer;
+  fb = video_buffer(0);
   RUN(test_uncoded16_unit_scale);
   RUN(test_scale_and_flips);
   RUN(test_pre0_bgnd_not_flip);

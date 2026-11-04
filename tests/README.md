@@ -47,10 +47,11 @@ Each file is one program built against `libsfcore.a` (the whole game with `main`
 | `test_maths.c` | trig tables, `divide`, `find_rotation` vs `atan2`, distances, rotations incl. out-of-range angles, `scan_poly_map` window (regression) |
 | `test_armlink.c` | linked lists under 20,000 random operations, resort, suspend/release, z-sort buckets and capacity |
 | `test_collision.c` | collision boxes (incl. the reproduced compare-chain quirk), ground height, `GPTR(0) == NULL`, pointer-sized owner fields (regressions) |
-| `test_load.c` | word swapping, case-insensitive lookup, LRFORM images (synthetic and every real image) |
+| `test_load.c` | word swapping, case-insensitive lookup, PNG backdrops (a synthetic image that must come back exactly, wrong size/damaged/missing files, every real image) |
 | `test_missions.c` | all 62 mission files, planet files and the default configuration |
 | `test_nvram.c` | save files: round trip, short files, name sanitising, delete |
 | `test_cel.c` | the cel engine pixel by pixel: 16 bpp, coded 1–8 bpp with PLUT, scale, flips, SKIPX, pixel processor, packed cels (regression), cel lists, clipping, last-word overread (regression) |
+| `test_cel_diff.c` | the cel engine against `tests/ref/sf_cel_ref.c`, a frozen copy of it from before the November 2026 performance work: the pixel processor for every PIXC word the game uses (all inputs), and 1,500 random cel lists (every depth, packed/unpacked, framebuffer sources, minified to magnified, perspective, ties on pixel centres). `SF_CELDIFF_CASES=n` runs more |
 | `test_armcell.c` | 16x16 ground cels from 4x4 tiles (tile *n* regression), cel cache, 6-bit map packing |
 | `test_text.c` | fonts, text widths, empty text (regression), typewriter reveal overrun (regression) |
 | `test_cinepak.c` | every frame of every video, a checksum of `Krisalis`, 3,000 corrupted/truncated packets |
@@ -129,7 +130,10 @@ expected / actual / difference images for the checkpoints after it.
 When a change is intended: run `make rebless`, look at the checkpoint images (`git diff`/`hg diff`
 of `tests/golden`, or the contact sheets in the report), then commit the new goldens with the code.
 If the goldens were recorded from a different `SF_Resources`, the comparison is skipped with a
-warning. A failure after a compiler upgrade with nothing else changed is reported with both
+warning. After a conversion of `SF_Resources` that must not change anything (a new file format, say),
+run `tests/run.py full --compare-across-resources`, which compares anyway, and then `make restamp`:
+it re-runs every scenario and records the new resources in `meta.txt` only where frames and audio
+are still identical. Never rebless for a conversion. A failure after a compiler upgrade with nothing else changed is reported with both
 compiler names; check the images and rebless.
 
 ## Fixtures
@@ -155,6 +159,7 @@ format is the game's in-memory `gamefile` struct: if it changes (`GAMEFILE_VERSI
 | `SF_RECORD=file` | record the real input as an `SF_SCRIPT` file |
 | `SF_WATCHDOG=sec` | print a backtrace and exit 3 if the game hangs |
 | `SF_TRACE_PAD=1` | log scripted buttons |
+| `SF_CELTRACE=file`, `SF_CELTRACE_FRAMES=a-b` | record every cel list drawn in frames a-b (see below) |
 
 The SDL build runs in real time, so its runs are not frame-exact; `make test` only checks that it
 boots and that scripted input reaches a mission.
@@ -166,10 +171,10 @@ Runs the scenarios that fly in the 3D game engine (those marked `performance: ye
 at a time, with no frame dumps, hashes, state log or audio capture, and prints frames per second:
 
     scenario                frames   fps(med)  fps(best)    cpu fps  spread
-    new-game-takeoff          2400        220        225        222      5%
-    mission-earth2            1800        195        198        200      3%
+    new-game-takeoff          2400        405        442        410     11%
+    mission-earth2            1800        413        423        416      5%
     ...
-    TOTAL                    20200        269        272        271
+    TOTAL                    20200        504        537        509
 
 * `fps(med)` / `fps(best)`: frames / wall-clock time, median and best of the runs.
 * `cpu fps`: frames / CPU time used (median), less affected by other load on the machine.
@@ -184,6 +189,17 @@ are appended, with a timestamp and the compiler, to `build/performance-history.c
 over time. The command reports figures only; it fails only if a scenario does not run. Timings are
 noisy on shared or virtual machines (identical runs varied by up to 2x on one), so compare figures from
 the same machine, preferably idle.
+
+## Cel engine traces (`make celtrace`, `make celbench`)
+
+About 95 % of the game's time is the software cel engine (`src/sf_cel.c`). `make celtrace` plays a few
+scenarios and records every cel list drawn in ten in-game frames of each (`SF_CELTRACE`; the CCBs, the
+cel data and PLUTs they use, and both frame buffers before and after) into `build/celtraces/`.
+`make celbench [REPEAT=n]` replays them through the renderer: it reports whether every frame buffer
+still comes out exactly as recorded, and the time per frame. Record traces *before* changing the
+renderer; replaying them afterwards is an exact regression check on real game scenes, and the timing
+is far steadier than whole-game runs (`tests/tools/celbench -n 20 --ref trace.bin` times the frozen
+reference renderer on the same input).
 
 ## Windows build check
 

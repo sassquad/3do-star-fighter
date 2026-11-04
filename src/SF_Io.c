@@ -3,6 +3,7 @@
 //	General utilities to read control pad etc.
 
 #include "SF_Io.h"
+#include "sf_platform.h"
 #include "SF_Utility.h"
 #include "SF_Video.h"
 #include "SF_Joystick.h"
@@ -65,15 +66,11 @@ controlpad_read(void)
 // Returns : Control pad words
 
 {
-  ControlPadEventData controlpad_data;
-  int32_t controlpad_result;
+  uint32_t buttons;
 
   // Read keypad
 
-  controlpad_result = GetControlPad(1, FALSE, &controlpad_data);
-  if (controlpad_result < 0) {
-    return (0);
-  }
+  buttons = plat_pad();
 
   joystick_poll();
   // If using joystick control, set controlpad buttons from joystick
@@ -83,66 +80,66 @@ controlpad_read(void)
     // Set button bits from joystick position
 
     if (pro_stick.x < 80) {
-      controlpad_data.cped_ButtonBits |= ControlLeft;
+      buttons |= ControlLeft;
     }
     if (pro_stick.x > 240) {
-      controlpad_data.cped_ButtonBits |= ControlRight;
+      buttons |= ControlRight;
     }
     if (pro_stick.y < 60) {
-      controlpad_data.cped_ButtonBits |= ControlUp;
+      buttons |= ControlUp;
     }
     if (pro_stick.y > 180) {
-      controlpad_data.cped_ButtonBits |= ControlDown;
+      buttons |= ControlDown;
     }
 
     // Set button bits from joystick buttons
 
     if (pro_stick.b & StickLeft) {
-      controlpad_data.cped_ButtonBits |= ControlLeft;
+      buttons |= ControlLeft;
     }
     if (pro_stick.b & StickRight) {
-      controlpad_data.cped_ButtonBits |= ControlRight;
+      buttons |= ControlRight;
     }
     if (pro_stick.b & StickUp) {
-      controlpad_data.cped_ButtonBits |= ControlUp;
+      buttons |= ControlUp;
     }
     if (pro_stick.b & StickDown) {
-      controlpad_data.cped_ButtonBits |= ControlDown;
+      buttons |= ControlDown;
     }
 
     // Set control pad buttons A,B,C, Shift, Start & Stop
 
     if (pro_stick.b & StickFire) {
-      controlpad_data.cped_ButtonBits |= ControlA;
+      buttons |= ControlA;
     }
     if (pro_stick.b & StickA) {
-      controlpad_data.cped_ButtonBits |= ControlA;
+      buttons |= ControlA;
     }
     if (pro_stick.b & StickB) {
-      controlpad_data.cped_ButtonBits |= ControlB;
+      buttons |= ControlB;
     }
     if (pro_stick.b & StickC) {
-      controlpad_data.cped_ButtonBits |= ControlC;
+      buttons |= ControlC;
     }
 
     if (pro_stick.b & StickLeftShift) {
-      controlpad_data.cped_ButtonBits |= ControlLeftShift;
+      buttons |= ControlLeftShift;
     }
     if (pro_stick.b & StickRightShift) {
-      controlpad_data.cped_ButtonBits |= ControlRightShift;
+      buttons |= ControlRightShift;
     }
 
     if (pro_stick.b & StickPlay) {
-      controlpad_data.cped_ButtonBits |= ControlStart;
+      buttons |= ControlStart;
     }
     if (pro_stick.b & StickStop) {
-      controlpad_data.cped_ButtonBits |= ControlX;
+      buttons |= ControlX;
     }
   }
 
   // Timeout to video ?
 
-  if (controlpad_data.cped_ButtonBits == 0) {
+  if (buttons == 0) {
     if (io_timetovideo > 0) {
       if (--io_timetovideo == 0) {
         io_playvideo();
@@ -154,7 +151,7 @@ controlpad_read(void)
 
   // Return buttons
 
-  return (controlpad_data.cped_ButtonBits);
+  return (buttons);
 }
 
 /**************************************/

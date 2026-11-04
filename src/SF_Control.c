@@ -821,10 +821,10 @@ control_showmission(int32_t show_mode, int32_t show_var)
 
     for (textcel = 1; textcel < FONT_MAXMENU; textcel++) {
       SetTextCelSize(cel_text[textcel], 0, 0);
-      ((cel_text[textcel]->tc_CCB)->ccb_Flags) |= CCB_SKIP;
-      ((cel_text[textcel]->tc_CCB)->ccb_Flags) &= ~CCB_LAST;
+      textcel_hide(cel_text[textcel], 1);
+      textcel_last(cel_text[textcel], 0);
     }
-    ((cel_text[FONT_MAXMENU - 1]->tc_CCB)->ccb_Flags) |= CCB_LAST;
+    textcel_last(cel_text[FONT_MAXMENU - 1], 1);
 
     return (BRIEF_CONTINUE);
   }
@@ -933,8 +933,7 @@ control_showmission(int32_t show_mode, int32_t show_var)
       textcel_slottouse = -1;
       textcel = 1;
       do {
-        if ((((cel_text[textcel]->tc_CCB)->ccb_Flags) &
-             CCB_SKIP)) {              // Is cel inactive ?
+        if (textcel_hidden(cel_text[textcel])) { // Is cel inactive ?
           textcel_slottouse = textcel; // Yes - get it's number
         }
         textcel += 1;
@@ -987,10 +986,9 @@ control_showmission(int32_t show_mode, int32_t show_var)
                      &cel_height); // Get it's size
       SetTextCelCoords(cel_text[textcel_slottouse], 160 - (cel_width >> 1),
                        textcel_newypos); // Set it's position
-      ((cel_text[textcel_slottouse]->tc_CCB)->ccb_PRE1) &=
-          (~1023); // Set it's Width to zero (If we are scrolling it)
-      ((cel_text[textcel_slottouse]->tc_CCB)->ccb_Flags) &=
-          ~CCB_SKIP; // Make active
+      // Set it's Width to zero (If we are scrolling it)
+      textcel_set_revealed(cel_text[textcel_slottouse], 0);
+      textcel_hide(cel_text[textcel_slottouse], 0); // Make active
       cel_text[textcel_slottouse]->tc_userData =
           (void *) (intptr_t) mission_linecolour; // Remember colour
     }
@@ -998,22 +996,20 @@ control_showmission(int32_t show_mode, int32_t show_var)
     // ARE WE MOVING TEXT CELS UP OR DOWN ?
 
     for (textcel = 1; textcel < FONT_MAXMENU; textcel++) {
-      if (!(((cel_text[textcel]->tc_CCB)->ccb_Flags) &
-            CCB_SKIP)) // Is cel active ?
+      if (!textcel_hidden(cel_text[textcel])) // Is cel active ?
       {
 
         if (text_multipleadder == 0) {
-          message_xlength = (((cel_text[textcel]->tc_CCB)->ccb_PRE1) & 1023);
+          message_xlength = (textcel_revealed(cel_text[textcel]));
           message_xlength += ((show_mode == 2) ? 3 : 2);
 
-          if (message_xlength > ((cel_text[textcel]->tc_CCB)->ccb_Width)) {
-            message_xlength = (cel_text[textcel]->tc_CCB)->ccb_Width;
+          if (message_xlength > textcel_width(cel_text[textcel])) {
+            message_xlength = textcel_width(cel_text[textcel]);
           } else if (arm_random() & 64) {
             sound_playsample(SOUND_BEEP, 60, 10, 0);
           }
 
-          (cel_text[textcel]->tc_CCB)->ccb_PRE1 &= (~1023);
-          (cel_text[textcel]->tc_CCB)->ccb_PRE1 |= message_xlength;
+          textcel_set_revealed(cel_text[textcel], message_xlength);
         }
 
         if (text_direction != 0) {
@@ -1024,8 +1020,7 @@ control_showmission(int32_t show_mode, int32_t show_var)
           if ((cel_text[textcel]->tc_CCB)->ccb_YPos <=
               text_topcheck) // Off top of screen ?
           {
-            ((cel_text[textcel]->tc_CCB)->ccb_Flags) |=
-                CCB_SKIP; // Yes, take it out
+            textcel_hide(cel_text[textcel], 1); // Yes, take it out
             textcel_lastcolouroffthetop =
                 (int32_t) (intptr_t) cel_text[textcel]
                     ->tc_userData;  // Remember colour !
@@ -1040,8 +1035,7 @@ control_showmission(int32_t show_mode, int32_t show_var)
               text_bottomcheck) // Off bottom of screen ?
           {
 
-            ((cel_text[textcel]->tc_CCB)->ccb_Flags) |=
-                CCB_SKIP; // Yes, take it out
+            textcel_hide(cel_text[textcel], 1); // Yes, take it out
             textcel_lastcolouroffthebot =
                 (int32_t) (intptr_t) cel_text[textcel]
                     ->tc_userData; // Remember colour !

@@ -45,6 +45,5 @@ void music_loadin(int32_t);       // INTERNAL - Load in music
 
 // external variables
 
-extern Item parent_taskref; // Task ref of parent
 
 #endif

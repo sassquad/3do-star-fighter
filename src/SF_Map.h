@@ -14,7 +14,6 @@
 
 // External Definitions
 
-extern Item VBLIOReq;
 extern ship_list ships;
 extern int32_t first_frame;
 extern cel_celdata cel_quad;

@@ -24,7 +24,8 @@ which produces `starfighter.exe` (copy `SDL2.dll` next to it; `WINGUI=1` hides t
 for 32- and 64-bit Windows, with recipes run under cmd.exe rules as `mingw32-make` does; see
 `tests/README.md`); it has not been run on Windows by me.
 
-Plain GNU Make; no CMake.
+Plain GNU Make; no CMake. On x86 the build needs a CPU with SSE4.1 (2008 or later); `make SSE41=0`
+builds for older ones (about a third slower).
 
 ## Run
 
@@ -39,6 +40,12 @@ controls (including a built-in key of a control the file does not list), the gam
 (on the console and in a message box) and exits. A game controller works too and is not affected by
 `config.txt`. If audio crashes, set `SDL_AUDIODRIVER` (the Windows build defaults to `directsound`). Saves go to `$SF_SAVEDIR`,
 else `$XDG_DATA_HOME/starfighter`, else `~/.local/share/starfighter`.
+
+## Resources
+
+`SF_Resources` is the game's data. The backdrops (`Images/*.png`) and fonts (`Fonts/*.png` + `.txt`)
+are converted from the original 3DO formats (frame-buffer dumps, FontLib files); everything else is
+used as shipped. PNG decoding uses the bundled public-domain `src/stb_image.h`.
 
 ## Video
 
@@ -56,6 +63,7 @@ starts is ignored until released).
     make test-asan       # the same under AddressSanitizer + UBSan
     make test-full       # everything, including the long scenarios (~6 min)
     make test-performance  # frames per second of the game engine, per scenario
+    make celtrace; make celbench   # record in-game cel lists; replay them (exact output + timing)
 
 Needs Python 3 and `SF_Resources` (`RES=/path/to/SF_Resources`); see `tests/README.md`.
 

@@ -1,6 +1,6 @@
 scenario: no-videos
 frames: 1500
-resources: f58c3022b0d6ed91
+resources: f3f4f05fba0afcb4
 compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
 cflags: -O2 -g -ffp-contract=off
 recorded: 2026-11-02 17:49:44

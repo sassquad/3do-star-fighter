@@ -7,6 +7,7 @@
 #include "SF_Screenutils.h"
 #include "SF_ARMSky.h"
 #include "SF_ARMCell.h"
+#include "sf_video.h"
 
 // Defines
 
@@ -30,21 +31,17 @@ screen_base(int32_t updateflags)
   // WAIT FOR FRAME DELAY ?
 
   if (updateflags & S_WAIT) {
-    WaitIO(VBLIOReq);
+    frame_sync();
   }
 
   // DRAW BACKDROP IMAGE ?
 
   if (updateflags & S_IMAGE) {
-    CopyVRAMPages(VRAMIOReq,
-                  (screen->sc_Bitmaps[screen->sc_curScreen])->bm_Buffer,
-                  backdrop, screen->sc_nFrameBufferPages, -1);
+    video_copy_in(video_back(), (const uint16_t *) backdrop);
   }
 
   if (updateflags & S_FLASH) {
-    SetVRAMPages(VRAMIOReq,
-                 (screen->sc_Bitmaps[screen->sc_curScreen])->bm_Buffer, 0,
-                 screen->sc_nFrameBufferPages, -1);
+    video_fill(video_back(), 0);
   }
 }
 
@@ -63,7 +60,7 @@ screen_update(int32_t updateflags)
 
   if ((updateflags & S_WAIT) || (updateflags & S_WAITFRAME) ||
       (updateflags & S_WAITSPACE)) {
-    WaitIO(VBLIOReq);
+    frame_sync();
   }
 
   // DRAW CEL_PLOTLIST ?
@@ -72,15 +69,14 @@ screen_update(int32_t updateflags)
     temp_cels = cel_quad.temp_cels - 1;
 
     (*(cel_plotlist + temp_cels))->ccb_Flags |= CCB_LAST;
-    DrawCels(screen->sc_BitmapItems[screen->sc_curScreen], *cel_plotlist);
+    draw_cels(video_back(), *cel_plotlist);
     (*(cel_plotlist + temp_cels))->ccb_Flags &= ~CCB_LAST;
   }
 
   // DRAW MENU ?
 
   if ((updateflags & S_MENU) && menu_status.hidden == 0) {
-    DrawCels(screen->sc_BitmapItems[screen->sc_curScreen],
-             menu_status.cel_textccb);
+    draw_cels(video_back(), menu_status.cel_textccb);
   }
 
   // DRAW GAME INFO TEXT ? (If Also drawing menu, skip first 3 (Score, Weapon
@@ -88,11 +84,10 @@ screen_update(int32_t updateflags)
 
   if (updateflags & S_INFO) {
     if (updateflags & S_MENU || updateflags & S_DEMO) {
-      DrawCels(screen->sc_BitmapItems[screen->sc_curScreen],
-               messages[(updateflags & S_MENU) ? 3 : 7].textcel->tc_CCB);
+      draw_cels(video_back(),
+                messages[(updateflags & S_MENU) ? 3 : 7].textcel->tc_CCB);
     } else {
-      DrawCels(screen->sc_BitmapItems[screen->sc_curScreen],
-               messages[0].textcel->tc_CCB);
+      draw_cels(video_back(), messages[0].textcel->tc_CCB);
     }
   }
 
@@ -103,8 +98,7 @@ screen_update(int32_t updateflags)
       screen_swap(screen_swaptype); // Do pre-flip screenswap ?
     }
 
-    DisplayScreen(screen->sc_Screens[screen->sc_curScreen], 0); // Swap screen
-    screen->sc_curScreen = 1 - screen->sc_curScreen;            // Swap screen
+    video_flip(); // Show the finished screen, draw into the other one
 
     if (screen_swaptype != 0) {
       screen_postswap(screen_swaptype); // Do post-flip screenswap ?
@@ -114,15 +108,15 @@ screen_update(int32_t updateflags)
   // RESTART NEXT DELAY ?
 
   if (updateflags & S_WAIT) {
-    WaitVBLDefer(VBLIOReq, DISPLAY_FRAMERATE);
+    frame_defer(DISPLAY_FRAMERATE);
   }
 
   if (updateflags & S_WAITSPACE) {
-    WaitVBLDefer(VBLIOReq, DISPLAY_FRAMERATESPACE);
+    frame_defer(DISPLAY_FRAMERATESPACE);
   }
 
   if (updateflags & S_WAITFRAME) {
-    WaitVBLDefer(VBLIOReq, 1);
+    frame_defer(1);
   }
 }
 
@@ -140,7 +134,7 @@ screen_intercept(void)
 
   // WAIT FOR DELAY
 
-  WaitIO(VBLIOReq);
+  frame_sync();
 
   // DRAW CURRENT (FULL) CEL LIST, RESET FOR NEXT BATCH
 
@@ -149,7 +143,7 @@ screen_intercept(void)
     temp_cels = cel_quad.temp_cels - 1;
 
     (*(cel_plotlist + temp_cels))->ccb_Flags |= CCB_LAST;
-    DrawCels(screen->sc_BitmapItems[screen->sc_curScreen], *cel_plotlist);
+    draw_cels(video_back(), *cel_plotlist);
     (*(cel_plotlist + temp_cels))->ccb_Flags &= ~CCB_LAST;
 
     cel_quad.temp_cels = 0;
@@ -166,22 +160,12 @@ screen_clear(int32_t red, int32_t green, int32_t blue, int32_t screen_type)
 // Returns : Nothing
 
 {
-
-  Rect rectangle;
-  GrafCon GCon;
-
-  SetFGPen(&GCon, MakeRGB15(red, green, blue));
-
-  rectangle.rect_XLeft = 0;
-  rectangle.rect_XRight = DISPLAY_WIDTH;
-  rectangle.rect_YTop = 0;
-  rectangle.rect_YBottom = DISPLAY_HEIGHT;
+  uint16_t colour = (uint16_t) MakeRGB15(red, green, blue);
 
   if (screen_type == SCR_UPDATE) {
-    FillRect(screen->sc_BitmapItems[screen->sc_curScreen], &GCon, &rectangle);
+    video_fill(video_back(), colour);
   } else {
-    FillRect(screen->sc_BitmapItems[1 - screen->sc_curScreen], &GCon,
-             &rectangle);
+    video_fill(1 - video_back(), colour);
   }
 }
 
@@ -198,7 +182,7 @@ screen_swap(int32_t swap_type)
 
   switch (swap_type) {
     case 1:
-      FadeToBlack(screen, 20); // SCREENSWAP 1 ?
+      video_fade_out(20); // SCREENSWAP 1 ?
       break;
     case 2:
       screenswap_blurscreen(); // SCREENSWAP 2 ?
@@ -222,7 +206,7 @@ screen_postswap(int32_t swap_type)
 
   switch (swap_type) {
     case 1:
-      FadeFromBlack(screen, 20); // SCREENSWAP 1 ?
+      video_fade_in(20); // SCREENSWAP 1 ?
       break;
   }
 
@@ -283,8 +267,7 @@ screenswap_zoominbox(void)
                          (1 << 11) |   // left / right memory format
                          319;          // 320 Pixel per row
 
-  screen_fade.ccb_SourcePtr =
-      (CelData *) ((screen->sc_Bitmaps[screen->sc_curScreen])->bm_Buffer);
+  screen_fade.ccb_SourcePtr = (CelData *) video_buffer(video_back());
   for (fade_loop = 0; fade_loop < 170; fade_loop += 8) {
 
     if (fade_loop <= 160) {
@@ -304,7 +287,7 @@ screenswap_zoominbox(void)
     screen_fade.ccb_YPos = (120 - fade_yloop) << 16;
     screen_fade.ccb_HDX = (fade_xloop << 20) / 160;
     screen_fade.ccb_VDY = (fade_yloop << 16) / 120;
-    DrawCels(screen->sc_BitmapItems[1 - (screen->sc_curScreen)], &screen_fade);
+    draw_cels(1 - video_back(), &screen_fade);
   }
 }
 
@@ -335,8 +318,7 @@ screenswap_blurscreen(void)
                           CCB_USEAV |  // Use AV control bits
                           CCB_BGND;    // pass 000rgb as colour - no transp
 
-  screen_fade.ccb_SourcePtr =
-      (CelData *) ((screen->sc_Bitmaps[1 - screen->sc_curScreen])->bm_Buffer);
+  screen_fade.ccb_SourcePtr = (CelData *) video_buffer(1 - video_back());
   screen_fade.ccb_HDY = 0;
   screen_fade.ccb_VDX = 0;
   screen_fade.ccb_HDDX = 0;
@@ -358,5 +340,5 @@ screenswap_blurscreen(void)
                          (1 << 7) |  // 2nd source is frame buffer
                          0;          // 2DV is 2
 
-  DrawCels(screen->sc_BitmapItems[screen->sc_curScreen], &screen_fade);
+  draw_cels(video_back(), &screen_fade);
 }

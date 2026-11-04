@@ -36,7 +36,6 @@
 
 typedef unsigned char ubyte;
 typedef unsigned char uint8;
-typedef int32_t Item;
 typedef int32_t Boolean;
 
 /* ------------------------------------------------------------------ */
@@ -115,29 +114,12 @@ typedef struct CCB {
 } CCB;
 
 /* ------------------------------------------------------------------ */
-/* Screens                                                             */
+/* Screens (see sf_video.h for the screen and frame-pacing API)        */
 /* ------------------------------------------------------------------ */
 #define SF_SCREEN_W 320
 #define SF_SCREEN_H 240
 
-typedef struct Bitmap {
-  int32_t bm_Width, bm_Height;
-  uint16_t *bm_Buffer; /* linear 320x240, 0RRRRRGGGGGBBBBB, host order */
-} Bitmap;
-
-typedef struct ScreenContext {
-  int32_t sc_nScreens;
-  int32_t sc_curScreen;
-  int32_t sc_nFrameBufferPages;
-  Item sc_Screens[2];
-  Item sc_BitmapItems[2];
-  Bitmap *sc_Bitmaps[2];
-} ScreenContext;
-
-typedef struct Rect {
-  int32_t rect_XLeft, rect_YTop, rect_XRight, rect_YBottom;
-} Rect;
-
+/* pen position and colours for DrawTextString */
 typedef struct GrafCon {
   int32_t gc_PenX, gc_PenY;
   int32_t gc_FGPen, gc_BGPen;
@@ -181,35 +163,9 @@ typedef struct TextCel {
 #define ControlRightShift 0x00400000u
 #define ControlLeftShift 0x00200000u
 
-typedef struct ControlPadEventData {
-  uint32_t cped_ButtonBits;
-} ControlPadEventData;
-
 /* ------------------------------------------------------------------ */
-/* Shim API (implemented in sf_platform.c / sf_cel.c / sf_load.c ...) */
+/* Remaining shim API (text in sf_text.c; screens in sf_video.h)       */
 /* ------------------------------------------------------------------ */
-int OpenGraphics(ScreenContext *sc, int nScreens);
-void CloseGraphics(ScreenContext *sc);
-int DisplayScreen(Item screenItem, Item unused);
-void DrawCels(Item bitmapItem, CCB *ccb);
-void FillRect(Item bitmapItem, GrafCon *gc, Rect *r);
-void FadeToBlack(ScreenContext *sc, int frames);
-void FadeFromBlack(ScreenContext *sc, int frames);
-#define EnableVAVG(x) ((void) 0)
-#define EnableHAVG(x) ((void) 0)
-#define SetCEControl(a, b, c) ((void) 0)
-Item GetVRAMIOReq(void);
-Item GetVBLIOReq(void);
-Item GetTimerIOReq(void);
-#define DeleteIOReq(x) ((void) (x))
-void WaitVBL(Item req, int frames);
-void WaitVBLDefer(Item req, int frames);
-void WaitIO(Item req);
-void CopyVRAMPages(Item req, void *dst, void *src, int pages, int mask);
-void SetVRAMPages(Item req, void *dst, int value, int pages, int mask);
-void SetScreenColor(Item screen, uint32_t entry);
-#define MakeCLUTColorEntry(i, r, g, b)                                         \
-  (((uint32_t) (i) << 24) | ((r) << 16) | ((g) << 8) | (b))
 
 /* 3DO mem */
 #define MEMTYPE_ANY 0
@@ -218,11 +174,6 @@ void SetScreenColor(Item screen, uint32_t entry);
 #define AllocMem(n, t) calloc(1, (n))
 #define ALLOCMEM(n, t) calloc(1, (n))
 #define FreeMem(p, n) free(p)
-/* OS items that no longer exist */
-
-/* controller + misc */
-uint32_t sf_pad_read(void); /* current button bits */
-int GetControlPad(int n, int wait, ControlPadEventData *d);
 
 /* text */
 FontDescriptor *LoadFont(const char *path, int memtype);
@@ -234,8 +185,23 @@ void SetTextCelColor(TextCel *t, uint32_t bg, uint32_t fg);
 void SetTextCelSize(TextCel *t, int32_t w, int32_t h);
 void GetTextCelSize(TextCel *t, int32_t *w, int32_t *h);
 void UpdateTextInCel(TextCel *t, int fUpdate, const char *text);
+/* Port helpers for what the game does to text cels between draws (it used to
+   poke the CCB's flag and preamble bits directly):
+     hidden:   CCB_SKIP - the cel stays in its list but is not drawn
+     last:     CCB_LAST - the cel ends the list it is drawn in
+     revealed: the typewriter effect - number of pixels shown per row, the low
+               10 bits of PRE1 (the width the cel engine decodes is this + 1)
+     link:     draw b after a */
+void textcel_hide(TextCel *t, int hidden);
+int textcel_hidden(const TextCel *t);
+void textcel_last(TextCel *t, int last);
+int32_t textcel_revealed(const TextCel *t);
+void textcel_set_revealed(TextCel *t, int32_t pixels);
+int32_t textcel_width(const TextCel *t);
+void textcel_link(TextCel *a, TextCel *b);
 #define SetFGPen(gc, c) ((gc)->gc_FGPen = (int32_t) (c))
 #define SetBGPen(gc, c) ((gc)->gc_BGPen = (int32_t) (c))
-int DrawTextString(FontDescriptor *f, GrafCon *gc, Item bitmap, const char *s);
+/* draw text straight into frame buffer 'buffer' (0/1) */
+int DrawTextString(FontDescriptor *f, GrafCon *gc, int buffer, const char *s);
 
 #endif

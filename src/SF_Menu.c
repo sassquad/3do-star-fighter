@@ -1428,7 +1428,7 @@ menu_resetmenutext(void)
 
   for (cel_base = 0; cel_base < FONT_MAXMENU; cel_base++) {
     SetTextCelSize(cel_text[cel_base], 0, 0);
-    (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_SKIP;
+    textcel_hide(cel_text[cel_base], 0);
   }
 }
 
@@ -1614,7 +1614,7 @@ menu_enter(int32_t current_menu, int32_t reset_to_top)
   GetTextCelSize(cel_text[cel_base], &width, &height);
   SetTextCelCoords(cel_text[cel_base], 160 - (width >> 1),
                    (int32_t) menus[current_menu].ypos - 2);
-  (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+  textcel_last(cel_text[cel_base], 0);
   cel_base++;
 
   // DRAW MENU OPTIONS (IF IT HAS ANY)
@@ -1672,7 +1672,7 @@ menu_enter(int32_t current_menu, int32_t reset_to_top)
                              menus[current_menu].ypos);
       }
 
-      (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+      textcel_last(cel_text[cel_base], 0);
       item_draw->tccbptr = cel_text[cel_base];
       cel_base++;
     }
@@ -1693,7 +1693,7 @@ menu_enter(int32_t current_menu, int32_t reset_to_top)
         SetTextCelCoords(cel_text[cel_base], 270 - width,
                          MENU_YOFFS + (MENU_YSIZE * item_draw->y_position) +
                              menus[current_menu].ypos);
-        (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+        textcel_last(cel_text[cel_base], 0);
         cel_base++;
       }
     }
@@ -1724,7 +1724,7 @@ menu_enter(int32_t current_menu, int32_t reset_to_top)
         SetTextCelCoords(cel_text[cel_base], 270 - width,
                          MENU_YOFFS + (MENU_YSIZE * item_draw->y_position) +
                              menus[current_menu].ypos);
-        (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+        textcel_last(cel_text[cel_base], 0);
         cel_base++;
       }
     }
@@ -1764,7 +1764,7 @@ menu_enter(int32_t current_menu, int32_t reset_to_top)
       SetTextCelCoords(cel_text[cel_base], 50,
                        MENU_YOFFS + (MENU_YSIZE * item_ypos) +
                            menus[current_menu].ypos);
-      (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+      textcel_last(cel_text[cel_base], 0);
       cel_base++;
 
       SetTextCelColor(cel_text[cel_base], 0,
@@ -1775,11 +1775,11 @@ menu_enter(int32_t current_menu, int32_t reset_to_top)
       SetTextCelCoords(cel_text[cel_base], 270 - width,
                        MENU_YOFFS + (MENU_YSIZE * item_ypos) +
                            menus[current_menu].ypos);
-      (cel_text[cel_base]->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+      textcel_last(cel_text[cel_base], 0);
       cel_base++;
     }
   }
-  (cel_text[cel_base - 1]->tc_CCB)->ccb_Flags |= CCB_LAST;
+  textcel_last(cel_text[cel_base - 1], 1);
 }
 
 /**************************************/
@@ -1980,8 +1980,8 @@ menu_display(int32_t title_background)
     if (current_menu->max_option >= 0) {
       look_option = current_menu->cur_option;
       item_display = &(current_menu->items[current_menu->cur_option]);
-      item_width = ((item_display->tccbptr->tc_CCB->ccb_Width)) + 10;
-      item_halfwidth = ((item_display->tccbptr->tc_CCB->ccb_Width) >> 1) + 10;
+      item_width = textcel_width(item_display->tccbptr) + 10;
+      item_halfwidth = (textcel_width(item_display->tccbptr) >> 1) + 10;
 
       if ((menu_status.current_menu == FLIGHTCONTROL_MENU &&
            look_option <= 7) ||

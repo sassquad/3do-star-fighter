@@ -61,8 +61,7 @@ message_initialise(int32_t demo_mode)
     messages[message_type].timer = 0;
     SetTextCelSize(messages[message_type].textcel, 0,
                    0); // Release text's memory
-    (messages[message_type].textcel->tc_CCB)->ccb_Flags |=
-        CCB_SKIP; // Make inactive
+    textcel_hide(messages[message_type].textcel, 1); // Make inactive
   }
 
   // Setup score & timer cel position
@@ -72,8 +71,7 @@ message_initialise(int32_t demo_mode)
 
   // Make score cel active
 
-  (messages[MESSAGE_SCORE].textcel->tc_CCB)->ccb_Flags &=
-      ~CCB_SKIP; // Make active
+  textcel_hide(messages[MESSAGE_SCORE].textcel, 0); // Make active
   message_addscore(0);
 
   // Set message add status
@@ -222,13 +220,13 @@ message_addxy(int32_t type, char *message, int32_t colour, int32_t back_colour,
   messages[type].timer = timer;   // Set message timer
   messages[type].flags = flags;   // Save message info
   messages[type].cursor = cursor; // Save cursor type info
-  messages[type].textcel->tc_CCB->ccb_Flags &= ~CCB_SKIP; // Make Active
+  textcel_hide(messages[type].textcel, 0); // Make Active
   messages[type].delay = delay;        // Ammount to delay by before displaying
   messages[type].scroll_speed = speed; // Speed of scroll
 
   if (flags & MESSAGE_SCROLL) {
-    messages[type].textcel->tc_CCB->ccb_PRE1 &=
-        (~1023); // Set it's Width to zero (If we are scrolling it)
+    // Set it's Width to zero (If we are scrolling it)
+    textcel_set_revealed(messages[type].textcel, 0);
   }
 }
 
@@ -257,11 +255,11 @@ message_update(void)
 
         if (messages[message_type].flags & MESSAGE_SCROLL) {
           message_xlength =
-              (messages[message_type].textcel->tc_CCB->ccb_PRE1 & 1023) +
+              (textcel_revealed(messages[message_type].textcel)) +
               messages[message_type].scroll_speed;
           if (message_xlength >
-              messages[message_type].textcel->tc_CCB->ccb_Width) {
-            message_xlength = messages[message_type].textcel->tc_CCB->ccb_Width;
+              textcel_width(messages[message_type].textcel)) {
+            message_xlength = textcel_width(messages[message_type].textcel);
           } else {
             sound_playsample(SOUND_BEEP,
                              40 + (message_type << 2) +
@@ -269,8 +267,7 @@ message_update(void)
                              100, 0);
           }
 
-          messages[message_type].textcel->tc_CCB->ccb_PRE1 &= (~1023);
-          messages[message_type].textcel->tc_CCB->ccb_PRE1 |= message_xlength;
+          textcel_set_revealed(messages[message_type].textcel, message_xlength);
         }
 
         // IS THE MESSAGE FLASHING A CURSOR ? - IF SO AND TIMER>>1&1 THEN PUT
@@ -281,7 +278,7 @@ message_update(void)
             cel_quad.x_pos0 =
                 (((messages[message_type].textcel->tc_CCB->ccb_XPos) >> 16) -
                  156) +
-                (messages[message_type].textcel->tc_CCB->ccb_PRE1 & 1023);
+                (textcel_revealed(messages[message_type].textcel));
             cel_quad.y_pos0 =
                 ((messages[message_type].textcel->tc_CCB->ccb_YPos) >> 16) -
                 117;
@@ -297,11 +294,9 @@ message_update(void)
         if (messages[message_type].flags & MESSAGE_FLASH) {
           if (messages[message_type].timer & 2) {
             sound_playsample(SOUND_BEEP, 50, 127, 0);
-            messages[message_type].textcel->tc_CCB->ccb_Flags |=
-                CCB_SKIP; // Hide text
+            textcel_hide(messages[message_type].textcel, 1); // Hide text
           } else {
-            messages[message_type].textcel->tc_CCB->ccb_Flags &=
-                ~CCB_SKIP; // Make text active again
+            textcel_hide(messages[message_type].textcel, 0); // Make text active again
           }
         }
 
@@ -310,8 +305,7 @@ message_update(void)
         if ((--messages[message_type].timer) <= 0) {
           SetTextCelSize(messages[message_type].textcel, 0,
                          0); // Release text's memory
-          (messages[message_type].textcel->tc_CCB)->ccb_Flags |=
-              CCB_SKIP; // Make inactive
+          textcel_hide(messages[message_type].textcel, 1); // Make inactive
         }
       }
     }
@@ -366,12 +360,10 @@ message_addweapon(void)
   if (weapon_type == WEAPON_LASER ||
       (weapon_type != WEAPON_LASER &&
        weapon_num <= 0)) { // If laser or none left, do not print anything
-    (messages[MESSAGE_WEAPON].textcel->tc_CCB)->ccb_Flags |=
-        CCB_SKIP; // Make inactive
+    textcel_hide(messages[MESSAGE_WEAPON].textcel, 1); // Make inactive
   } else {
 
-    (messages[MESSAGE_WEAPON].textcel->tc_CCB)->ccb_Flags &=
-        (~CCB_SKIP);                          // Make Active
+    textcel_hide(messages[MESSAGE_WEAPON].textcel, 0);                          // Make Active
     sprintf(weapon_string, "%d", weapon_num); // Render # to string
     SetTextCelColor(messages[MESSAGE_WEAPON].textcel, 0,
                     weapon_num < 10 ? ORANGE_15 : WHITE_15); // Set colour
@@ -381,7 +373,7 @@ message_addweapon(void)
     SetTextCelCoords(
         messages[MESSAGE_WEAPON].textcel,
         299 -
-            (((messages[MESSAGE_WEAPON].textcel->tc_CCB->ccb_Width) + 2) & ~3),
+            ((textcel_width(messages[MESSAGE_WEAPON].textcel) + 2) & ~3),
         29); // Set pos
              // // Set text position
   }
@@ -400,8 +392,7 @@ message_addtimer(void)
 
   char timer_string[8];
 
-  messages[MESSAGE_TIMER].textcel->tc_CCB->ccb_Flags &=
-      (~CCB_SKIP); // Make Active
+  textcel_hide(messages[MESSAGE_TIMER].textcel, 0); // Make Active
   sprintf(timer_string, "%d", mission.mission_timer);
   SetTextCelColor(messages[MESSAGE_TIMER].textcel, 0,
                   mission.mission_timer < 30 ? ORANGE_15

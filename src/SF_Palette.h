@@ -9,8 +9,7 @@
 
 // External Variables
 
-extern ScreenContext *screen;
-extern Item VBLIOReq;
+#include "sf_video.h"
 
 // Palette definitions
 

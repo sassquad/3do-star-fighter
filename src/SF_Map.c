@@ -1022,7 +1022,7 @@ map_showstatus(ship_stack *ship)
   UpdateTextInCel(cel_text[0], TRUE, map_return_ship_title(ship, 1));
   GetTextCelSize(cel_text[0], &width, &height);
   SetTextCelCoords(cel_text[0], 160 - (width >> 1), 18);
-  (cel_text[0]->tc_CCB)->ccb_Flags |= CCB_LAST;
+  textcel_last(cel_text[0], 1);
 
   // Draw all ships status items
 

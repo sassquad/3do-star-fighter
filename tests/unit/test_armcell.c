@@ -3,6 +3,7 @@
  * map feature in the same place (the level-of-detail seam). */
 #include "sft.h"
 #include "sf_compat.h"
+#include "sf_video.h"
 #include "SF_Celutils.h"
 #include "SF_ARMCell.h"
 
@@ -161,7 +162,6 @@ TEST(test_generatemaps_bit_packing)
    Plot_Land uses (P0 = (x, y), P1 = (x+n, y), P3 = (x, y+n)), so map row Y
    should land on screen rows 4*(Y - y)..+3 in both.  Regression: PRE0 bit
    30 (BGND) was taken for a vertical flip, mirroring every far cell. */
-static ScreenContext sc;
 static uint16_t *fb;
 
 #define ORIGIN_X 100 /* screen position of the cell's (x, y) corner */
@@ -242,7 +242,7 @@ learn_grass(int far)
     arm_add4cel4(&cq, map, 8, 16);
   }
   ccbs[0].ccb_Flags |= CCB_LAST;
-  DrawCels(sc.sc_BitmapItems[0], &ccbs[0]);
+  draw_cels(0, &ccbs[0]);
   grass = fb[(ORIGIN_Y + 2) * 320 + ORIGIN_X + 2];
 }
 
@@ -254,7 +254,7 @@ draw_mid(int x, int y, int along_x)
   corners(4);
   arm_add4cel4(&cq, map, x, y);
   ccbs[0].ccb_Flags |= CCB_LAST;
-  DrawCels(sc.sc_BitmapItems[0], &ccbs[0]);
+  draw_cels(0, &ccbs[0]);
   return road_lines(16, along_x);
 }
 
@@ -266,7 +266,7 @@ draw_far(int x, int y, int along_x)
   corners(8);
   arm_addcelfrom512map(&cq, x, y, 0);
   ccbs[0].ccb_Flags |= CCB_LAST;
-  DrawCels(sc.sc_BitmapItems[0], &ccbs[0]);
+  draw_cels(0, &ccbs[0]);
   return road_lines(32, along_x);
 }
 
@@ -313,11 +313,11 @@ int
 main(void)
 {
   SFT_BEGIN();
-  if (!OpenGraphics(&sc, 2)) {
-    printf("Bail out! OpenGraphics failed\n");
+  if (!video_open()) {
+    printf("Bail out! video_open failed\n");
     return 1;
   }
-  fb = sc.sc_Bitmaps[0]->bm_Buffer;
+  fb = video_buffer(0);
   RUN(test_add4cel4_uses_tile_n);
   RUN(test_add4cel4_cache_hit_reuses_cel);
   RUN(test_generatemaps_bit_packing);

@@ -272,7 +272,7 @@ load_backdrop(char *backdrop_name, int32_t load_over)
         1, 320 * 240 * 2); // allocate backdrop buffer on first use
   }
   (void) load_over;
-  load_image_raw(backdrop, backdrop_file); // Or load raw image straight in ?
+  load_image_png(backdrop, backdrop_file); // Images/<name>.png
 }
 
 /**************************************/
@@ -281,45 +281,56 @@ load_backdrop(char *backdrop_name, int32_t load_over)
    'ship_sdb' contains real pointers, so mission_data cannot simply be read over
    the file image. */
 
-static const uint8_t *rd_cur;
+/* Read cursor over a file image held in a local buffer.  (It used to be a
+   global pointer left pointing into the caller's stack buffer after return;
+   gcc -O3 rightly reports that as -Wdangling-pointer.) */
+typedef struct {
+  const uint8_t *p;
+} Rd;
 
 static uint8_t
-rd8(void)
+rd8_(Rd *r)
 {
-  return *rd_cur++;
+  return *r->p++;
 }
 
 static int32_t
-rd32(void)
+rd32_(Rd *r)
 {
-  int32_t v =
-      (int32_t) (((uint32_t) rd_cur[0] << 24) | ((uint32_t) rd_cur[1] << 16) |
-                 ((uint32_t) rd_cur[2] << 8) | rd_cur[3]);
-  rd_cur += 4;
+  const uint8_t *b = r->p;
+  int32_t v = (int32_t) (((uint32_t) b[0] << 24) | ((uint32_t) b[1] << 16) |
+                         ((uint32_t) b[2] << 8) | b[3]);
+  r->p += 4;
   return v;
 }
 
 static void
-rdstr(void *d, int n)
+rdstr_(Rd *r, void *d, int n)
 {
-  memcpy(d, rd_cur, (size_t) n);
-  rd_cur += n;
+  memcpy(d, r->p, (size_t) n);
+  r->p += n;
 }
 
+/* the parsers below use a local 'Rd rd' */
+#define rd8() rd8_(&rd)
+#define rd32() rd32_(&rd)
+#define rdstr(d, n) rdstr_(&rd, (d), (n))
+
 static void
-rd_performance(performance_data *p)
+rd_performance_(Rd *r, performance_data *p)
 {
   int i;
-  p->engine = rd32();
-  p->control = rd32();
-  p->shields = rd32();
+  p->engine = rd32_(r);
+  p->control = rd32_(r);
+  p->shields = rd32_(r);
   for (i = 0; i < 13; i++) {
-    p->weapons[i] = rd32();
+    p->weapons[i] = rd32_(r);
   }
-  p->laser_rate = rd32();
-  p->missile_rate = rd32();
-  p->launch_rate = rd32();
+  p->laser_rate = rd32_(r);
+  p->missile_rate = rd32_(r);
+  p->launch_rate = rd32_(r);
 }
+#define rd_performance(p) rd_performance_(&rd, (p))
 
 #define FILE_MISSION_SIZE 4924
 
@@ -351,7 +362,7 @@ load_mission_file(mission_data *m, const char *fmt, ...)
     return NULL;
   }
   memset(m, 0, sizeof *m);
-  rd_cur = buf;
+  Rd rd = {buf};
   m->x_startpos = rd8();
   m->y_startpos = rd8();
   m->z_startpos = rd8();
@@ -442,7 +453,7 @@ load_mission_file(mission_data *m, const char *fmt, ...)
   rdstr(m->title, 32);
   rdstr(m->location, 20);
   rdstr(m->variation, 20);
-  if (rd_cur != buf + FILE_MISSION_SIZE) {
+  if (rd.p != buf + FILE_MISSION_SIZE) {
     fprintf(stderr, "mission parse size mismatch\n");
   }
   return m;
@@ -461,7 +472,7 @@ load_planet_file(planet_data *p, const char *fmt, ...)
     fprintf(stderr, "LOAD ERROR : Can't load '%s'\n", name);
     return NULL;
   }
-  rd_cur = buf;
+  Rd rd = {buf};
   p->explosion1_data1 = rd32();
   p->explosion1_data2 = rd32();
   p->explosion2_data1 = rd32();
@@ -489,7 +500,7 @@ load_config_file(game_configuration *c, const char *fmt, ...)
     return NULL;
   }
   memset(c, 0, sizeof *c);
-  rd_cur = buf;
+  Rd rd = {buf};
   c->version = rd8();
   c->free1 = rd8();
   c->free2 = rd8();

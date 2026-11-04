@@ -19,7 +19,7 @@
 // Externals
 
 extern message messages[FONT_MAXMESSAGE];
-extern ScreenContext *screen;
+#include "sf_video.h"
 
 // Function Prototypes
 

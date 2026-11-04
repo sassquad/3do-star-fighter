@@ -15,15 +15,10 @@ palette_set(int32_t p_red, int32_t p_green, int32_t p_blue)
 
 {
 
-  int32_t bank, clut_reg;
-
-  for (bank = 0; bank < screen->sc_nScreens; bank++) {
-    for (clut_reg = 0; clut_reg < 32; clut_reg++) {
-      SetScreenColor(screen->sc_Screens[bank],
-                     MakeCLUTColorEntry(clut_reg,
-                                        ((clut_reg << 3) * p_red) >> 8,
-                                        ((clut_reg << 3) * p_green) >> 8,
-                                        ((clut_reg << 3) * p_blue) >> 8));
-    }
-  }
+  /* On the 3DO this scaled the screens' colour lookup tables (CLUTs).  The
+     port has never emulated display CLUTs (the shim was a no-op), so the
+     goldens are recorded without it; kept as a no-op. */
+  (void) p_red;
+  (void) p_green;
+  (void) p_blue;
 }

@@ -10,7 +10,7 @@
 
 // External Variables
 
-extern ScreenContext *screen;
+#include "sf_video.h"
 
 // Function Prototypes
 

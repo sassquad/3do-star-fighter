@@ -6,28 +6,30 @@
  * file format and the rendering rules below were taken from the SDK sources
  * (3DO Toolkit 1.5, Lib3DO.lib/TextLib).
  *
- * FONT FILE (all fields big-endian 32-bit words)
- *   0 'FONT'   1 chunk size   2 version     3 font flags   4 char height   5
- * widest char 6 bits per pixel (5 for the game's fonts)   7 first char   8 last
- * char   9 char extra spacing 10 ascent  11 descent     12 leading    13 offset
- * of char info table   14 size of that table 15 offset of char data    16 size
- * of char data    17..20 reserved Char info table: one word per character,
- * (offset into char data << 10) | width in pixels. Font flags: 0x100 =
- * two-colour font (pixels carry an outline/shadow colour as well).
- *
- * GLYPH DATA (5 bpp, compressed).  Each glyph is a stream of 16-bit packets,
- * two per big-endian word, unpacked into an 8-bit coded cel buffer by
- * blit_char5(): 1ppppppppppppppp   output 3 pixels (three 5-bit values), then
- * check for end of line 0100xxxxcccccccc   skip cccccccc blank lines
- *      0010xxcccccppppp   repeat pixel ppppp ccccc times
- *      0001xxxxcccccnnn   go up nnn+1 lines, copy ccccc pixels
- *      0000xxpppppppppp   output up to 2 pixels, check for end of line after
- * each 0000000000000000   early end of line Pixel values:  00aaa  foreground,
- * aaa/8 coverage, against what is already on screen 01aaa  outline/shadow
- * colour, aaa/8 coverage, against what is on screen 10aaa  foreground blended
- * against the outline colour A destination byte is  (p | p<<5) ^ 0xE0:  low 5
- * bits = PLUT index, top 3 bits = "AMV" (7 - aaa) which the cel engine uses to
- * scale the pixel already on screen (see sf_cel.c).
+ * FONTS (converted from the 3DO FontLib files by tools/convert_resources.py)
+ *   Fonts/<name>.txt  metrics: "key value" lines (flags, height, widest, first,
+ *                     last, spacing, ascent, descent, leading), then one
+ *                     "char x width" line per character; '#' starts a comment.
+ *                     Font flags: 0x100 = two-colour font (pixels carry an
+ *                     outline/shadow colour as well).
+ *   Fonts/<name>.png  8-bit greyscale strip, 'height' pixels high, with each
+ *                     character's glyph at its x.  Each pixel is an op, applied
+ *                     to the text cel in row-major order:
+ *                        0       leave the pixel
+ *                        1..31   write pixel value p (as the byte below)
+ *                        128+k   copy the pixel k rows above if its low 5 bits
+ *                                are non-zero
+ *                     This replays FontLib's 5 bpp packet unpacker (FontBlit5To8)
+ *                     pixel for pixel, including its copy packets, which matter
+ *                     where glyphs overlap (the Menu font's spacing is -2).
+ *   Pixel values:  00aaa  foreground, aaa/8 coverage, against what is already
+ *                         on screen
+ *                  01aaa  outline/shadow colour, aaa/8 coverage, against what
+ *                         is on screen
+ *                  10aaa  foreground blended against the outline colour
+ *   A cel byte is (p | p<<5) ^ 0xE0: low 5 bits = PLUT index, top 3 bits =
+ *   "AMV" (7 - aaa), which the cel engine uses to scale the pixel already on
+ *   screen (see sf_cel.c).
  *
  * The cel buffers here are kept as plain bytes while text is rendered, then
  * converted to the "word-swapped" model (32-bit words equal to the big-endian
@@ -35,6 +37,8 @@
  */
 #include "sf_compat.h"
 #include "sf_load.h"
+#include "sf_video.h"
+#include "sf_png.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,12 +65,12 @@
 /* Font files                                                          */
 /* ------------------------------------------------------------------ */
 struct FontDescriptor {
-  uint32_t flags, charHeight, charWidth, bitsPerPixel, firstChar, lastChar;
-  uint32_t charExtra, ascent, descent, leading;
-  uint8_t *file; /* the whole font file, as stored (big-endian) */
-  size_t size;
-  const uint8_t *charInfo;
-  const uint8_t *charData;
+  uint32_t flags, charHeight, charWidth, firstChar, lastChar;
+  int32_t charExtra; /* spacing between characters (may be negative) */
+  uint32_t ascent, descent, leading;
+  uint8_t *ops; /* glyph strip, strip_w x charHeight */
+  int32_t strip_w;
+  int32_t x[256], width[256];
 };
 
 static uint32_t
@@ -76,78 +80,94 @@ be32(const uint8_t *p)
          ((uint32_t) p[2] << 8) | p[3];
 }
 
+static int
+read_metrics(FontDescriptor *fd, const char *path)
+{
+  char line[256];
+  int seen = 0;
+  FILE *f = sf_fopen_resource(path, "rb");
+  if (!f) {
+    fprintf(stderr, "font: cannot open '%s'\n", path);
+    return 0;
+  }
+  while (fgets(line, sizeof line, f)) {
+    char key[32];
+    long a, b, c;
+    if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') {
+      continue;
+    }
+    if (sscanf(line, "%ld %ld %ld", &a, &b, &c) == 3) {
+      if (a < 0 || a > 255 || b < 0 || c < 0 || c > 255) {
+        break;
+      }
+      fd->x[a] = (int32_t) b;
+      fd->width[a] = (int32_t) c;
+      continue;
+    }
+    if (sscanf(line, "%31s %ld", key, &a) != 2) {
+      break;
+    }
+    seen++;
+    if (!strcmp(key, "flags")) {
+      fd->flags = (uint32_t) a;
+    } else if (!strcmp(key, "height")) {
+      fd->charHeight = (uint32_t) a;
+    } else if (!strcmp(key, "widest")) {
+      fd->charWidth = (uint32_t) a;
+    } else if (!strcmp(key, "first")) {
+      fd->firstChar = (uint32_t) a;
+    } else if (!strcmp(key, "last")) {
+      fd->lastChar = (uint32_t) a;
+    } else if (!strcmp(key, "spacing")) {
+      fd->charExtra = (int32_t) a;
+    } else if (!strcmp(key, "ascent")) {
+      fd->ascent = (uint32_t) a;
+    } else if (!strcmp(key, "descent")) {
+      fd->descent = (uint32_t) a;
+    } else if (!strcmp(key, "leading")) {
+      fd->leading = (uint32_t) a;
+    } else {
+      seen--;
+    }
+  }
+  fclose(f);
+  if (seen != 9 || fd->lastChar > 255 || fd->firstChar > fd->lastChar) {
+    fprintf(stderr, "font: '%s' is not a valid metrics file\n", path);
+    return 0;
+  }
+  return 1;
+}
+
 FontDescriptor *
 LoadFont(const char *path, int memtype)
 {
-  FontDescriptor *fd;
-  FILE *f;
-  uint8_t *data;
-  long size;
-  uint32_t h[17];
-  int i;
+  char name[512];
+  FontDescriptor *fd = (FontDescriptor *) calloc(1, sizeof *fd);
+  int w = 0, h = 0;
+  uint32_t c;
   (void) memtype;
-
-  f = sf_fopen_resource(path, "rb");
-  if (f == NULL) {
-    fprintf(stderr, "font: cannot open '%s'\n", path);
+  snprintf(name, sizeof name, "%s.txt", sf_rel(path));
+  if (!read_metrics(fd, name)) {
+    free(fd);
     return NULL;
   }
-  fseek(f, 0, SEEK_END);
-  size = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  if (size < 84) {
-    fclose(f);
-    fprintf(stderr, "font: '%s' is too small\n", path);
+  snprintf(name, sizeof name, "%s.png", sf_rel(path));
+  fd->ops = sf_png_load(name, 1, &w, &h);
+  if (!fd->ops || h != (int) fd->charHeight) {
+    fprintf(stderr, "font: cannot load glyphs '%s'\n", name);
+    sf_png_free(fd->ops);
+    free(fd);
     return NULL;
   }
-  data = (uint8_t *) malloc((size_t) size);
-  if (data == NULL || fread(data, 1, (size_t) size, f) != (size_t) size) {
-    fclose(f);
-    free(data);
-    fprintf(stderr, "font: cannot read '%s'\n", path);
-    return NULL;
+  fd->strip_w = w;
+  for (c = fd->firstChar; c <= fd->lastChar; c++) {
+    if (fd->x[c] + fd->width[c] > w) {
+      fprintf(stderr, "font: char %u lies outside '%s'\n", c, name);
+      sf_png_free(fd->ops);
+      free(fd);
+      return NULL;
+    }
   }
-  fclose(f);
-
-  for (i = 0; i < 17; i++) {
-    h[i] = be32(data + 4 * i);
-  }
-  if (h[0] != 0x464F4E54u /* 'FONT' */) {
-    fprintf(stderr, "font: '%s' is not a font file\n", path);
-    free(data);
-    return NULL;
-  }
-  if (h[6] != 5) {
-    fprintf(stderr,
-            "font: '%s' is %u bits per pixel; only the 5 bpp format used by "
-            "Star Fighter is supported\n",
-            path, h[6]);
-    free(data);
-    return NULL;
-  }
-  if ((uint64_t) h[13] + h[14] > (uint64_t) size ||
-      (uint64_t) h[15] + h[16] > (uint64_t) size || h[8] < h[7] ||
-      (uint64_t) (h[8] - h[7] + 1) * 4 > h[14]) {
-    fprintf(stderr, "font: '%s' has an invalid layout\n", path);
-    free(data);
-    return NULL;
-  }
-
-  fd = (FontDescriptor *) calloc(1, sizeof *fd);
-  fd->flags = h[3];
-  fd->charHeight = h[4];
-  fd->charWidth = h[5];
-  fd->bitsPerPixel = h[6];
-  fd->firstChar = h[7];
-  fd->lastChar = h[8];
-  fd->charExtra = h[9];
-  fd->ascent = h[10];
-  fd->descent = h[11];
-  fd->leading = h[12];
-  fd->file = data;
-  fd->size = (size_t) size;
-  fd->charInfo = data + h[13];
-  fd->charData = data + h[15];
   return fd;
 }
 
@@ -157,138 +177,49 @@ UnloadFont(FontDescriptor *fd)
   if (fd == NULL) {
     return;
   }
-  free(fd->file);
+  sf_png_free(fd->ops);
   free(fd);
 }
 
-/* width of a character (0 if the font has no such character); *offset = glyph
- * offset in char data */
+/* width of a character (0 if the font has no such character); *x = where its
+ * glyph is in the strip */
 static int32_t
-char_info(const FontDescriptor *fd, uint32_t ch, uint32_t *offset)
+char_info(const FontDescriptor *fd, uint32_t ch, uint32_t *x)
 {
-  uint32_t v;
   if (ch < fd->firstChar || ch > fd->lastChar) {
     return 0;
   }
-  v = be32(fd->charInfo + 4 * (ch - fd->firstChar));
-  if (offset) {
-    *offset = v >> 10;
+  if (x) {
+    *x = (uint32_t) fd->x[ch];
   }
-  return (int32_t) (v & 0xFF);
+  return fd->width[ch];
 }
 
-/* ------------------------------------------------------------------ */
-/* Glyph unpacker: C version of FontBlit5To8_.s                        */
-/* ------------------------------------------------------------------ */
+/* Draw a glyph (strip column glyph_x, src_w x src_h) into an 8-bit coded cel
+   buffer at (dst_x, dst_y) by replaying its pixel ops (see the top of the file). */
 static void
-blit_char5(const FontDescriptor *fd, uint32_t glyph_offset, int32_t src_w,
-           int32_t src_h, uint8_t *dst_base, size_t dst_size, int32_t bpr,
-           int32_t dst_x, int32_t dst_y)
+draw_glyph(const FontDescriptor *fd, uint32_t glyph_x, int32_t src_w, int32_t src_h,
+           uint8_t *dst_base, size_t dst_size, int32_t bpr, int32_t dst_x, int32_t dst_y)
 {
-  const uint8_t *s = fd->charData + glyph_offset;
-  const uint8_t *s_end = fd->file + fd->size;
-  uint8_t *dst = dst_base + (size_t) dst_y * bpr + dst_x; /* r3 */
-  uint8_t *dst_end = dst_base + dst_size;
-  int32_t xcount = src_w; /* r6 */
-  int32_t rows = src_h;   /* r2 */
-
-#define PIXBYTE(p) ((uint8_t) ((((p) | ((p) << 5)) ^ 0xE0) & 0xFF))
-#define PUT(p)                                                                 \
-  do {                                                                         \
-    uint32_t p_ = (p);                                                         \
-    if (dst >= dst_base && dst < dst_end && p_ != 0)                           \
-      *dst = PIXBYTE(p_);                                                      \
-    dst++;                                                                     \
-  } while (0)
-
-  for (;;) {
-    uint32_t pair;
-    int half;
-    if (s + 4 > s_end) {
-      return;
-    }
-    pair = be32(s);
-    s += 4;
-    for (half = 0; half < 2; half++) {
-      uint32_t r10 =
-          half ? (pair << 16)
-               : pair; /* packet being handled is in the top 16 bits */
-      int next_row = 0;
-
-      if (r10 & 0x80000000u) { /* write3 */
-        PUT((r10 >> 26) & 0x1F);
-        PUT((r10 >> 21) & 0x1F);
-        PUT((r10 >> 16) & 0x1F);
-        xcount -= 3;
-        if (xcount == 0) {
-          next_row = 1;
-        }
-      } else if (r10 & 0x40000000u) { /* blankrows */
-        int32_t n = (int32_t) ((r10 >> 16) & 0xFF);
-        rows -= n;
-        if (rows == 0) {
-          return;
-        }
-        dst += (ptrdiff_t) n * bpr;
-        xcount = src_w;
-      } else if (r10 & 0x20000000u) { /* litrun */
-        int32_t count = (int32_t) ((r10 >> 21) & 0x1F);
-        uint32_t p = (r10 >> 16) & 0x1F;
-        xcount -= count;
-        if (p == 0) {
-          dst += count;
-        } else {
-          int32_t k;
-          for (k = 0; k < count; k++) {
-            PUT(p);
-          }
-        }
-        if (xcount == 0) {
-          next_row = 1;
-        }
-      } else if (r10 & 0x10000000u) { /* copyrun */
-        int32_t lines = (int32_t) ((r10 >> 16) & 7) + 1;
-        int32_t count = (int32_t) ((r10 >> 19) & 0x1F), k;
-        const uint8_t *from = dst - (ptrdiff_t) lines * bpr;
-        xcount -= count;
-        for (k = 0; k < count; k++, from++) {
-          if (from >= dst_base && from < dst_end && dst >= dst_base &&
-              dst < dst_end && (*from & 0x1F)) {
-            *dst = *from;
-          }
-          dst++;
-        }
-        if (xcount == 0) {
-          next_row = 1;
-        }
-      } else { /* write2 */
-        if ((r10 >> 16) == 0) {
-          next_row = 1; /* early end of line */
-        } else {
-          PUT((r10 >> 21) & 0x1F);
-          if (--xcount == 0) {
-            next_row = 1;
-          } else {
-            PUT((r10 >> 16) & 0x1F);
-            if (--xcount == 0) {
-              next_row = 1;
-            }
-          }
-        }
+  int32_t r, c;
+  for (r = 0; r < src_h; r++) {
+    const uint8_t *op = fd->ops + (size_t) r * (size_t) fd->strip_w + glyph_x;
+    for (c = 0; c < src_w; c++) {
+      ptrdiff_t d = (ptrdiff_t) (dst_y + r) * bpr + dst_x + c;
+      uint32_t o = op[c];
+      if (o == 0 || d < 0 || (size_t) d >= dst_size) {
+        continue;
       }
-
-      if (next_row) {
-        rows -= 1;
-        if (rows == 0) {
-          return;
+      if (o < 32) {
+        dst_base[d] = (uint8_t) (((o | (o << 5)) ^ 0xE0) & 0xFF);
+      } else {
+        ptrdiff_t from = d - (ptrdiff_t) (o - 128) * bpr;
+        if (from >= 0 && (dst_base[from] & 0x1F)) {
+          dst_base[d] = dst_base[from];
         }
-        dst += (bpr - src_w) + xcount;
-        xcount = src_w;
       }
     }
   }
-#undef PUT
-#undef PIXBYTE
 }
 
 /* ------------------------------------------------------------------ */
@@ -602,7 +533,7 @@ layout_text(TextCel *t, const char *text, int render, int32_t *max_w,
         int32_t cw = char_info(fd, (uint8_t) *c, &off);
         if (render && cw > 0 && dst_x + cw <= right_edge &&
             dst_x >= t->tc_leftMargin && dst_y + char_h <= bottom_edge) {
-          blit_char5(fd, off, cw, char_h, t->tc_bytes, t->tc_size,
+          draw_glyph(fd, off, cw, char_h, t->tc_bytes, t->tc_size,
                      t->tc_celRowBytes, dst_x, dst_y);
         }
         dst_x += cw + spacing;
@@ -662,7 +593,7 @@ UpdateTextInCel(TextCel *t, int replace, const char *text)
 }
 
 int
-DrawTextString(FontDescriptor *fd, GrafCon *gc, Item bitmap, const char *text)
+DrawTextString(FontDescriptor *fd, GrafCon *gc, int buffer, const char *text)
 {
   TextCel *t = CreateTextCel(fd, 0, 0, 0);
   if (t == NULL) {
@@ -671,9 +602,62 @@ DrawTextString(FontDescriptor *fd, GrafCon *gc, Item bitmap, const char *text)
   UpdateTextInCel(t, 1, text);
   SetTextCelColor(t, (uint32_t) gc->gc_BGPen, (uint32_t) gc->gc_FGPen);
   SetTextCelCoords(t, gc->gc_PenX, gc->gc_PenY);
-  DrawCels(bitmap, t->tc_CCB);
+  draw_cels(buffer, t->tc_CCB);
   gc->gc_PenX += t->tc_XPosInCel;
   gc->gc_PenY += t->tc_YPosInCel;
   DeleteTextCel(t);
   return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Port helpers (see sf_compat.h)                                      */
+/* ------------------------------------------------------------------ */
+void
+textcel_hide(TextCel *t, int hidden)
+{
+  if (hidden) {
+    t->tc_CCB->ccb_Flags |= CCB_SKIP;
+  } else {
+    t->tc_CCB->ccb_Flags &= ~CCB_SKIP;
+  }
+}
+
+int
+textcel_hidden(const TextCel *t)
+{
+  return (t->tc_CCB->ccb_Flags & CCB_SKIP) != 0;
+}
+
+void
+textcel_last(TextCel *t, int last)
+{
+  if (last) {
+    t->tc_CCB->ccb_Flags |= CCB_LAST;
+  } else {
+    t->tc_CCB->ccb_Flags &= ~CCB_LAST;
+  }
+}
+
+int32_t
+textcel_revealed(const TextCel *t)
+{
+  return (int32_t) (t->tc_CCB->ccb_PRE1 & 1023);
+}
+
+void
+textcel_set_revealed(TextCel *t, int32_t pixels)
+{
+  t->tc_CCB->ccb_PRE1 = (t->tc_CCB->ccb_PRE1 & ~1023u) | (uint32_t) pixels;
+}
+
+int32_t
+textcel_width(const TextCel *t)
+{
+  return t->tc_CCB->ccb_Width;
+}
+
+void
+textcel_link(TextCel *a, TextCel *b)
+{
+  a->tc_CCB->ccb_NextPtr = b->tc_CCB;
 }

@@ -49,6 +49,5 @@ void joystick_poll(void);
 int32_t
 joystick_registerports(void); /* refresh pro_stick from the platform layer */
 
-extern Item parent_taskref;
 extern stick_struct pro_stick;
 #endif

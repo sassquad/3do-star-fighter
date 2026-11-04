@@ -9,6 +9,7 @@
 #include "SF_Palette.h"
 #include "SF_ARMCell.h"
 #include "SF_Screenutils.h"
+#include "sf_video.h"
 #include <string.h>
 
 //	Definitions
@@ -121,8 +122,8 @@ cel_initialise(void)
   cel_quad.cache_lookup = cache_lookup;
   cel_quad.cache_free = cache_free;
 
-  cel_quad.screen_address0 = (char *) ((screen->sc_Bitmaps[0])->bm_Buffer);
-  cel_quad.screen_address1 = (char *) ((screen->sc_Bitmaps[1])->bm_Buffer);
+  cel_quad.screen_address0 = (char *) video_buffer(0);
+  cel_quad.screen_address1 = (char *) video_buffer(1);
 
   return (1);
 }

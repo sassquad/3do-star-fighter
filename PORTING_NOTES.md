@@ -11,7 +11,7 @@
 | Input / window / timing | `plat_sdl.c` written; **never compiled against real SDL2 headers** (none in my sandbox; syntax-checked against a hand-written shim only) |
 | Save games | Done (`SF_NVRam.c`, plain files) |
 | Video | **Implemented** (Cinepak + SDX2 audio, `SF_Video.c` / `sf_cinepak.c`). Tested headless with `into1` and `Krisalis` (frames decode cleanly and look right; audio decode checked numerically, not heard). Missing files are skipped; the other videos are untested |
-| Text font | Original `Fonts/*` files, decoded by `sf_text.c` (see §6) |
+| Text font | `Fonts/*.png` glyph strips + `*.txt` metrics, converted from the original FontLib files (see §6, §11) |
 | ARM assembly → C | **Partly done** – see §2 |
 | Playable game | **Untested** – all assembly is translated; ships, structures and the landscape draw in headless runs; flying, combat, weapons, AI, saving etc. have not been exercised |
 
@@ -85,8 +85,9 @@ load ("word-swapped" model). Consequences:
 * A *byte* at file offset N of such a blob is at memory offset `N ^ 3`: use `SF_BYTE()` (`sf_compat.h`).
   `collision_details` (four `char`s in a word) has its field order reversed on little-endian hosts.
 * Pure byte maps (`poly_map`, `sprite_map`, `height_map`) are not swapped.
-* The framebuffer is a linear 320×240 host `uint16_t` buffer. Image files (`Images/*`, `LoadImage` in the
-  original) are stored in the 3DO's **LRFORM** (left/right) layout, decoded in `load_image_raw`:
+* The framebuffer is a linear 320×240 host `uint16_t` buffer. Backdrop images are now `Images/*.png`
+  (8-bit RGB, loaded by `load_image_png`; see §11). The original files were stored in the 3DO's
+  **LRFORM** (left/right) layout, which the one-off converter decoded:
   for each pair of display rows (2j, 2j+1), memory row 2j holds the *left* halves (x 0..159) of both rows
   interleaved pixel by pixel, and memory row 2j+1 holds the *right* halves; i.e. display (y,x) is at memory
   row `2*(y>>1) + (x>=160)`, column `2*(x%160) + (y&1)`. Some files start with an `IMAG` chunk followed by a
@@ -113,14 +114,15 @@ cross-checked against the source:
   bit 15 of the PLUT entry. `ACW/ACCW` culling, `USEAV`, `PXOR`, `MARIA` are ignored.
 * Quad filling uses pixel-centre sampling; hardware rounding may differ by a pixel.
 
-Performance is untested on realistic scenes (float per-texel quads).
+Performance: see §11. The engine is still forward-mapped in floating point (exactly as before), but
+skips work that provably cannot change a pixel.
 
 ## 6. Known gaps
 
-* **Font.** `Fonts/{Message,Menu,Title}` are 3DO FontLib `FONT` files: 21-word header, one
-  `(offset<<10 | width)` word per character, and 5 bpp glyphs in FontLib's 16-bit packet compression.
-  `sf_text.c` loads them as-is and ports FontLib's `FontBlit5To8` unpacker and TextLib's text cels
-  (8bpp coded cels, PLUT blends, AMV anti-aliasing against the screen). The cel engine honours
+* **Font.** `Fonts/{Message,Menu,Title}` were 3DO FontLib `FONT` files (5 bpp glyphs in FontLib's
+  16-bit packet compression). They are now a PNG glyph strip and a metrics text file each (§11), drawn
+  by replaying per-pixel ops that reproduce FontLib's `FontBlit5To8` exactly. `sf_text.c` keeps
+  TextLib's text cels (8bpp coded cels, PLUT blends, AMV anti-aliasing against the screen). The cel engine honours
   `CCB_USEAV` for 8bpp coded pixels and recognises TextLib's PIXC word `0x1F00BFC0`
   (screen * AMV/8 + pixel colour). Format notes are at the top of `sf_text.c`.
 * **Video**: see §8. Files absent => skipped, as required.
@@ -139,7 +141,7 @@ Performance is untested on realistic scenes (float per-texel quads).
 1. Fly it: take off, shoot, get shot, explode, land, save/load, play several missions, and report anything wrong.
    Untested areas that most likely hide bugs: weapons/explosions (bits, smoke, lasers), the AI (`test_prog.c`),
    enemy ships, space missions (stars/planets), lock-on boxes, pause/menu-in-game, configure screen.
-2. Performance check on a real machine (forward-mapped cel quads in floating point).
+2. Performance: done on the headless build (§11); worth a look on the SDL build on a slow machine.
 3. Compare shading/colours with a real 3DO or an emulator: the PIXC decode and a few shade offsets were inferred.
 
 ## 8. Video playback
@@ -206,3 +208,43 @@ height skew, `arm_addcelfrom512map`) and the text cels (sane size/stride/width f
 parameters, so the cause is not yet found. It may be a cel-engine limitation (e.g. how very small or
 heavily-minified forward-mapped cels, or the vertical-flip cels, are filled) or a state carried between cels.
 Please check whether you see it in the real build; if so, a screenshot and what you pressed would help.
+
+## 11. Simplification and performance work (November 2026)
+
+Plan and measurements: the project doc "improvement plan". Every step kept the goldens (frames and
+audio) bit-identical; each was checked with `make test-full`, the cel-engine differential test and
+replays of cel lists recorded before the work.
+
+**Measured result** (`make test-performance`, 2-core x86-64, median fps): TOTAL 268 → 519 (1.94×);
+per scenario from 1.6× (`mission-plastic`) to 2.2× (`new-game-takeoff`, `weapons-and-views`). The
+totals include the menus before each mission, so in-flight frames gain a little more.
+
+| Step | What | Effect |
+|---|---|---|
+| Build flags | `-O3`; `-msse4.1` on x86 (`SSE41=0` to opt out; 32-bit x86 also gets `-mfpmath=sse`); `-ffp-contract=off` is now mandatory in every build | ~+30 %. `ceilf` becomes one `roundss`. `-ffp-contract=off` keeps FMA targets (aarch64, `-march=native`) from moving pixels |
+| Pixel processor | per-PIXC lookup tables instead of three divisions per channel | 3-10 % |
+| Rasteriser | whole texel rows skipped when they cannot reach a pixel centre (corner positions are monotonic along a row); texels decoded only once they cover a pixel; edge-test terms hoisted per pixel row; axis-aligned texels filled as rectangles; corner positions and their pixel-centre indices shared between neighbouring texels | 18-39 % on in-game cel lists |
+| Screens | `sf_video.c` (`video_open/flip/show/fill/copy_in/fade_out/fade_in`, `frame_wait/defer/sync`) replaces OpenGraphics, ScreenContext, Item/IO requests, DisplayScreen, CopyVRAMPages, SetVRAMPages, FillRect, FadeTo/FromBlack, WaitVBL/WaitIO, GetControlPad; `sf_sys.c` removed | simpler; same calls in the same order |
+| Cel engine interface | `draw_cels(buffer, list)`; inside, each CCB is decoded once into a typed `CelJob` (`cel_prepare`) and rasterised (`cel_render`). Game code no longer pokes text-cel CCB bits: `textcel_hide/hidden/last/link/revealed/set_revealed/width` | clearer; the typewriter reveal (31 Oct overrun) has one implementation |
+| Resources | `Images/*` → `Images/*.png` (stb_image, PNG only); `Fonts/*` → `Fonts/*.png` + `.txt` | LRFORM and FontLib decoders removed |
+
+Kept on purpose: CCBs remain the format the game builds and the renderer reads (much of it is
+translated assembly that follows the original line by line, and the reference renderer, cel traces and
+differential test use it); Cinepak video and AIFF/AIFC audio are unchanged (re-encoding video would
+change pixels; the AIFF parser is needed for the music streams anyway); 3D model, map, mission and
+palette data have no generic equivalent. A byte-per-texel texture format was not done: after the
+rasteriser work, texel decoding is 7-9 % of renderer time.
+
+**Font conversion detail.** FontLib's unpacker writes non-zero pixels and has "copy run" packets that
+copy the pixel k rows above in the destination. Each pixel of a glyph box is visited at most once, in
+row-major order, and copies only read earlier rows of the same box (checked for every glyph), so a
+glyph is stored as one op per pixel: 0 leave, 1-31 write that value, 128+k copy from k rows above if
+non-zero. Replaying the ops is identical to unpacking, also where glyphs overlap (the Menu font's
+spacing is -2): checked for every pair of glyphs of every font, and for 10,534 strings (all game text
+plus every two-character string) rendered with the old and new code.
+
+**Tools added for this kind of work:** `make celtrace` / `make celbench` (record in-game cel lists,
+replay them for exact-output checks and quiet timing), `tests/unit/test_cel_diff.c` (thousands of
+random cel lists against `tests/ref/sf_cel_ref.c`, a frozen copy of the renderer before the work), and
+`tests/run.py full --compare-across-resources` / `make restamp` for lossless resource conversions.
+

@@ -66,8 +66,7 @@ font_initialise(TextCel **cel_text)
   // Link menu cels together
 
   for (font_loop = 0; font_loop < (FONT_MAXMENU - 1); font_loop++) {
-    ((*(cel_text + font_loop))->tc_CCB)->ccb_NextPtr =
-        (*(cel_text + font_loop + 1))->tc_CCB;
+    textcel_link(*(cel_text + font_loop), *(cel_text + font_loop + 1));
   }
 
   // Create message cels
@@ -80,12 +79,11 @@ font_initialise(TextCel **cel_text)
   // Link message cels together
 
   for (font_loop = 0; font_loop < (FONT_MAXMESSAGE - 1); font_loop++) {
-    (messages[font_loop].textcel->tc_CCB)->ccb_NextPtr =
-        messages[font_loop + 1].textcel->tc_CCB;
-    (messages[font_loop].textcel->tc_CCB)->ccb_Flags &= ~CCB_LAST;
+    textcel_link(messages[font_loop].textcel, messages[font_loop + 1].textcel);
+    textcel_last(messages[font_loop].textcel, 0);
   }
 
-  (messages[FONT_MAXMESSAGE - 1].textcel->tc_CCB)->ccb_Flags |= CCB_LAST;
+  textcel_last(messages[FONT_MAXMESSAGE - 1].textcel, 1);
 }
 
 /**************************************/
@@ -134,10 +132,8 @@ font_paint(int32_t font_bc, int32_t font_fc, int32_t font_xp, int32_t font_yp,
   gcon.gc_PenY = font_yp;
 
   if (screen_type == SCR_UPDATE) {
-    DrawTextString(*(font_list + font_num), &gcon,
-                   screen->sc_BitmapItems[screen->sc_curScreen], font_str);
+    DrawTextString(*(font_list + font_num), &gcon, video_back(), font_str);
   } else {
-    DrawTextString(*(font_list + font_num), &gcon,
-                   screen->sc_BitmapItems[1 - screen->sc_curScreen], font_str);
+    DrawTextString(*(font_list + font_num), &gcon, 1 - video_back(), font_str);
   }
 }

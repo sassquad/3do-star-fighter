@@ -106,13 +106,6 @@ char animate_poly[1024];     // Pointer to texture animations file
 
 int32_t configure_waiting =
     0; // Initial configure load ? Decides language / main menu
-ScreenContext screenbanks,
-    *screen = &screenbanks; // Screen
-
-Item ioreq_timer; // IO requests
-Item VRAMIOReq;
-Item VBLIOReq;
-Item parent_taskref; // Task ref of parent
 
 // Sound System Variables
 // ----------------------
@@ -1207,31 +1200,11 @@ game_initialise(void)
 
 {
 
-  // INITIALISE OS RESOURCES
+  // INITIALISE SCREEN (two frame buffers, drawing into buffer 0)
 
-  parent_taskref = 0; // Put item ref# of game task in global variable
-
-  // INITIALISE SCREEN
-
-  screen->sc_nScreens = 2; // Get 2 screenbanks
-  if (!OpenGraphics(screen, 2)) {
+  if (!video_open()) {
     game_end(); // If failed, quit game
   }
-  screen->sc_curScreen = 0;          // Set current screen to 0
-  EnableVAVG(screen->sc_Screens[0]); // Enable sub-pixel averaging
-  EnableVAVG(screen->sc_Screens[1]);
-  EnableHAVG(screen->sc_Screens[0]);
-  EnableHAVG(screen->sc_Screens[1]);
-  SetCEControl(screen->sc_BitmapItems[0], 1 << 26,
-               1 << 26); // Enable cel clipping for screen 0
-  SetCEControl(screen->sc_BitmapItems[1], 1 << 26,
-               1 << 26); // Enable cel clipping for screen 1
-
-  // GET IO REQUESTS
-
-  VRAMIOReq = GetVRAMIOReq();    // Create RAM IO Request
-  VBLIOReq = GetVBLIOReq();      // Create VBL IO Request
-  ioreq_timer = GetTimerIOReq(); // Create Timer IO Request
 
   // INITIALISE SOUND, CELS, FONTS, JOYSTICK READER, LOAD GAME DATA
 
@@ -1263,10 +1236,7 @@ game_end(void)
   sound_unloadsamples();
   joystick_terminate();
   font_terminate();
-  CloseGraphics(screen);
-  DeleteIOReq(VRAMIOReq);
-  DeleteIOReq(VBLIOReq);
-  DeleteIOReq(ioreq_timer);
+  video_close();
   exit(0);
 }
 
@@ -1291,10 +1261,10 @@ game_intro(void)
   load_backdrop("Fednet", 0); // Load in backdrop picture
 
   screen_base(S_IMAGE); // Print it
-  FadeToBlack(screen, 30);
-  screen_update(S_BANK);     // Display it
-  FadeFromBlack(screen, 90); // Fade from screen
-  WaitVBL(VBLIOReq, 150);    // Wait
+  video_fade_out(30);
+  screen_update(S_BANK); // Display it
+  video_fade_in(90);     // Fade from screen
+  frame_wait(150);       // Wait
   screen_setswap(1);         // Set screen swap
 
   // INITIALISE MUSIC PLAYER & START MUSIC PLAYING

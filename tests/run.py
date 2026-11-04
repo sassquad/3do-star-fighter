@@ -7,6 +7,13 @@
     tests/run.py [options] rebless [SCENARIO ...]   re-record goldens (all scenarios if none given)
     tests/run.py [options] make-fixtures  re-create tests/fixtures/base.save by playing the save scenario
     tests/run.py [options] performance    frames per second of the headless build, per scenario
+    tests/run.py [options] restamp [SCENARIO ...]   after a lossless resource conversion: re-run the
+                                          scenarios and, only where frames and audio still match the
+                                          goldens exactly, record the new SF_Resources manifest
+    tests/run.py [options] celtrace       record the cel lists of a few in-game frames per scenario
+                                          into build/celtraces/ (with the renderer as it is now)
+    tests/run.py [options] celbench       replay build/celtraces/: check the renderer still produces
+                                          the recorded framebuffers, and time it (--repeat passes)
     tests/run.py list                     list scenarios
 
 Options:
@@ -15,6 +22,8 @@ Options:
     -j N              parallel jobs (default: number of CPUs)
     --keep            keep large run files (audio WAVs)
     --repeat N        performance: runs per scenario (default 3)
+    --compare-across-resources   compare frames/audio with goldens recorded from different SF_Resources
+                      (normally such goldens are skipped with a warning); use to prove a conversion lossless
 
 Results go to build/test-report/ (index.html, summary.txt, images).  See tests/README.md.
 """
@@ -60,15 +69,15 @@ SHORTEN_ALLOWED = {
 }
 
 LEVELS = {'T': 0, 'E': 1, 'M': 2, 'H': 3}
-REQUIRED_FLAGS = ['-funsigned-char', '-fwrapv', '-fno-strict-aliasing']
-TEST_CFLAGS = '-O2 -g -ffp-contract=off'
+REQUIRED_FLAGS = ['-funsigned-char', '-fwrapv', '-fno-strict-aliasing', '-ffp-contract=off']
+TEST_CFLAGS = '-O3 -g'  # the Makefile adds -ffp-contract=off and (x86) -msse4.1 itself
 
 # build variants: name -> (make variables, binary)
 VARIANTS = {
     'headless': (['HEADLESS=1', 'WERROR=1', 'CFLAGS=' + TEST_CFLAGS], 'starfighter-headless'),
     # -O1 makes gcc's format-truncation analysis noisier; the headless build is the warning gate
     'asan': (['HEADLESS=1', 'SAN=address,undefined',
-              'CFLAGS=-O1 -g -ffp-contract=off -Wno-format-truncation'],
+              'CFLAGS=-O1 -g -Wno-format-truncation'],
              'starfighter-headless'),
     'sdl': (['WERROR=1', 'CFLAGS=' + TEST_CFLAGS], 'starfighter'),
     # clang reports warnings gcc does not; they are compared with tests/clang-warnings.txt instead
@@ -774,14 +783,17 @@ def compare_with_golden(scn, info, variant, results, manifest, audio):
     if want is None:
         results.add(Result(group, name, FAIL, 'no golden yet - run: make rebless SCENARIOS=%s' % scn.name))
         return
-    if meta.get('resources') and meta['resources'] != manifest:
+    across = ''
+    if meta.get('resources') and meta['resources'] != manifest and COMPARE_ACROSS:
+        across = ' (goldens recorded with SF_Resources %s, now %s: compared anyway)' % (meta['resources'], manifest)
+    elif meta.get('resources') and meta['resources'] != manifest:
         results.add(Result(group, name, WARN,
                            'goldens were recorded with different SF_Resources (%s, now %s): not compared; '
                            'run make rebless if the new resources are intended' % (meta['resources'], manifest)))
         return
     first = next((i for i, (a, b) in enumerate(zip(want, got)) if a != b), None)
     if first is None and len(want) == len(got):
-        results.add(Result(group, name, PASS, '%d frames' % len(got)))
+        results.add(Result(group, name, PASS, '%d frames%s' % (len(got), across)))
     else:
         if first is None:
             first = min(len(want), len(got))
@@ -1145,6 +1157,130 @@ def cmd_rebless(args):
     return status
 
 
+# scenario, first frame, last frame: in-game frames that are typical of each kind of scene
+CELTRACE_SET = [('mission-ice', 1150, 1159), ('new-game-takeoff', 1450, 1459), ('mission-space', 1150, 1159),
+                ('weapons-and-views', 1240, 1249), ('mission-death', 1150, 1159),
+                ('crash-and-game-over', 900, 909), ('menus-tour', 600, 609)]
+CELTRACES = os.path.join(BUILD, 'celtraces')
+
+
+def cmd_celtrace(args):
+    res = find_resources(args.resources)
+    results = Results()
+    headless = build('headless', results, args.jobs, unit=True)
+    if not headless:
+        return 1
+    mksave = os.path.join(BUILD, 'headless', 'tools', 'sf_mksave')
+    os.makedirs(CELTRACES, exist_ok=True)
+    status = 0
+    for name, first, last in CELTRACE_SET:
+        if args.only and args.only not in name:
+            continue
+        scn = Scenario(os.path.join(SCENARIOS, name + '.scn'))
+        rundir = os.path.join(BUILD, 'runs', 'celtrace', name)
+        shutil.rmtree(rundir, ignore_errors=True)
+        os.makedirs(rundir)
+        savedir = os.path.join(rundir, 'save')
+        err = prepare_savedir(scn, savedir, mksave)
+        r = make_resources_view(res, rundir, scn.resources) if scn.resources else res
+        script = os.path.join(rundir, 'script.txt')
+        with open(script, 'w') as f:
+            f.write('\n'.join(scn.script) + '\n')
+        out = os.path.join(CELTRACES, name + '.bin')
+        env = clean_env({'SF_SCRIPT': script, 'SF_MAXFRAMES': str(last + 1), 'SF_SAVEDIR': savedir,
+                         'SF_WATCHDOG': str(scn.watchdog), 'SF_CELTRACE': out,
+                         'SF_CELTRACE_FRAMES': '%d-%d' % (first, last)})
+        rc, _, errtext = (1, '', err) if err else run([headless, r], env=env, timeout=scn.watchdog + 60)
+        if rc != 0:
+            print('  %-24s FAILED: %s' % (name, errtext[-300:]))
+            status = 1
+        else:
+            print('  %-24s frames %d-%d -> %s (%.1f MB)' % (name, first, last, os.path.relpath(out, ROOT),
+                                                            os.path.getsize(out) / 1e6), flush=True)
+    return status
+
+
+def cmd_celbench(args):
+    results = Results()
+    headless = build('headless', results, args.jobs, unit=True)
+    if not headless:
+        return 1
+    bench = os.path.join(BUILD, 'headless', 'tools', 'celbench')
+    traces = sorted(f for f in os.listdir(CELTRACES) if f.endswith('.bin')) if os.path.isdir(CELTRACES) else []
+    if not traces:
+        print('no traces in %s - record them first: tests/run.py celtrace' % os.path.relpath(CELTRACES, ROOT))
+        return 1
+    status, total = 0, 0.0
+    print('%-24s %12s  %s' % ('trace', 'ms/frame', 'framebuffers'))
+    for t in traces:
+        if args.only and args.only not in t:
+            continue
+        rc, out, err = run([bench, '-n', str(max(args.repeat, 1)), os.path.join(CELTRACES, t)])
+        m = re.search(r'([0-9.]+) ms per frame', out)
+        ms = float(m.group(1)) if m else float('nan')
+        total += ms if m else 0
+        ok = rc == 0 and 'all framebuffers identical' in out
+        status |= 0 if ok else 1
+        print('%-24s %12.3f  %s' % (t[:-4], ms, 'identical' if ok else 'DIFFER\n' + (out + err)[-800:]),
+              flush=True)
+    print('%-24s %12.3f' % ('TOTAL', total))
+    return status
+
+
+def cmd_restamp(args):
+    """Re-record only the resources stamp of goldens, after proving frames and audio are unchanged.
+
+    Used after a lossless conversion of SF_Resources: every golden scenario is run on the new
+    resources; where its frame hashes and audio digest equal the golden exactly, meta.txt gets the
+    new manifest.  Anything that differs is reported and left alone (that would need a rebless)."""
+    res = find_resources(args.resources)
+    results = Results()
+    headless = build('headless', results, args.jobs, unit=True)
+    if not headless:
+        return 1
+    mksave = os.path.join(BUILD, 'headless', 'tools', 'sf_mksave')
+    manifest, _ = resources_manifest(res)
+    scns = [s for s in load_scenarios(args.only, set(args.names) if args.names else None) if s.golden]
+
+    def one(s):
+        return s, run_scenario(s, headless, res, 'headless', mksave)
+
+    status = 0
+    with cf.ThreadPoolExecutor(args.jobs) as ex:
+        for s, info in ex.map(one, scns):
+            gdir = golden_dir(s)
+            metapath = os.path.join(gdir, 'meta.txt')
+            want = read_hashes(os.path.join(gdir, 'frames.txt'))
+            got = read_hashes(os.path.join(info.get('rundir', ''), 'frames.txt'))
+            why = None
+            if info.get('error') or info.get('rc') != 0:
+                why = 'run failed: %s' % (info.get('error') or 'exit %s' % info.get('rc'))
+            elif want is None or got != want:
+                why = 'frames differ from the golden'
+            elif s.audio:
+                a = wav_stats(os.path.join(info['rundir'], 'audio.wav'))
+                if not a or a['sha256'] != read_meta(os.path.join(gdir, 'audio.txt')).get('sha256'):
+                    why = 'audio differs from the golden'
+            if why:
+                print('  %-24s NOT restamped: %s' % (s.name, why), flush=True)
+                status = 1
+                continue
+            with open(metapath) as f:
+                lines = f.read().splitlines()
+            old = next((l.split(':', 1)[1].strip() for l in lines if l.startswith('resources:')), '')
+            lines = [('resources: %s' % manifest) if l.startswith('resources:') else l for l in lines]
+            with open(metapath, 'w') as f:
+                f.write('\n'.join(lines) + '\n')
+            print('  %-24s %s' % (s.name, 'unchanged' if old == manifest else 'restamped %s -> %s' % (old, manifest)),
+                  flush=True)
+            if not KEEP:
+                try:
+                    os.remove(os.path.join(info['rundir'], 'audio.wav'))
+                except OSError:
+                    pass
+    return status
+
+
 def cmd_make_fixtures(args):
     """Plays tests/scenarios/save-and-load.scn and keeps the save file it writes."""
     res = find_resources(args.resources)
@@ -1273,24 +1409,32 @@ def cmd_performance(args):
 
 
 def main():
-    global KEEP
+    global KEEP, COMPARE_ACROSS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('command', choices=['quick', 'asan', 'full', 'rebless', 'make-fixtures', 'list',
-                                        'performance'])
-    ap.add_argument('names', nargs='*', help='scenarios (rebless only)')
+                                        'performance', 'restamp', 'celtrace', 'celbench'])
+    ap.add_argument('names', nargs='*', help='scenarios (rebless / restamp only)')
     ap.add_argument('--resources')
     ap.add_argument('--only')
     ap.add_argument('-j', '--jobs', type=int, default=ncpu())
     ap.add_argument('--keep', action='store_true')
     ap.add_argument('--repeat', type=int, default=3)
+    ap.add_argument('--compare-across-resources', action='store_true')
     args = ap.parse_args()
     KEEP = args.keep
+    COMPARE_ACROSS = args.compare_across_resources
     if args.command == 'list':
         for s in load_scenarios():
             print('%-24s %-6s %6d frames  %s' % (s.name, s.suite, s.frames, s.description))
         return 0
     if args.command == 'rebless':
         return cmd_rebless(args)
+    if args.command == 'celtrace':
+        return cmd_celtrace(args)
+    if args.command == 'celbench':
+        return cmd_celbench(args)
+    if args.command == 'restamp':
+        return cmd_restamp(args)
     if args.command == 'make-fixtures':
         return cmd_make_fixtures(args)
     if args.command == 'performance':
@@ -1299,5 +1443,6 @@ def main():
 
 
 KEEP = False
+COMPARE_ACROSS = False
 if __name__ == '__main__':
     sys.exit(main())

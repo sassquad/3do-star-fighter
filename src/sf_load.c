@@ -1,5 +1,6 @@
 /* sf_load.c - resource file access for the SDL port */
 #include "sf_load.h"
+#include "sf_png.h"
 #include <stdarg.h>
 #include <dirent.h>
 #include <strings.h>
@@ -164,67 +165,33 @@ load_fileat_words(void *buffer, const char *fmt, ...)
   return r;
 }
 
-/* Decode a 16-bit 320x240 image stored in the 3DO's "LRFORM" (left/right)
- * layout.
- *
- * LRFORM is the frame buffer's native arrangement.  For each pair of display
- * rows (2j, 2j+1): memory row 2j   holds the LEFT  halves (x = 0..159)   of
- * both rows, interleaved pixel by pixel memory row 2j+1 holds the RIGHT halves
- * (x = 160..319) of both rows, interleaved likewise i.e.  display (y, x)  <->
- * memory row 2*(y>>1) + (x>=160),  memory column 2*(x%160) + (y&1). (Worked out
- * by matching the 'FedNet' image against a screenshot from a 3DO emulator.)
- * Image files either start with an 'IMAG' chunk followed by a 'PDAT' chunk
- * containing the pixels, or are bare 153600-byte frame-buffer dumps; both use
- * this layout. */
+/* Load a 320x240 backdrop image, "<relpath>.png" (8-bit RGB), into a linear
+ * host-order 0RRRRRGGGGGBBBBB buffer.  The PNGs were converted from the 3DO's
+ * frame-buffer dumps by storing each 5-bit channel c as c<<3 | c>>2, so v>>3
+ * gives back exactly the original pixel. */
 void *
-load_image_raw(void *buffer, const char *relpath)
+load_image_png(void *buffer, const char *relpath)
 {
-  static uint8_t file[320 * 240 * 2 + 4096];
+  char name[512];
   uint16_t *dst = (uint16_t *) buffer;
-  FILE *f = sf_fopen_resource(strip_root(relpath), "rb");
-  size_t n, off = 0;
-  int x, y;
-  if (!f) {
-    fprintf(stderr, "LOAD ERROR : Can't load image '%s'\n", relpath);
+  uint8_t *rgb;
+  int w = 0, h = 0, i;
+  snprintf(name, sizeof name, "%s.png", strip_root(relpath));
+  rgb = sf_png_load(name, 3, &w, &h);
+  if (!rgb) {
+    fprintf(stderr, "LOAD ERROR : Can't load image '%s'\n", name);
     return NULL;
   }
-  n = fread(file, 1, sizeof file, f);
-  fclose(f);
-  if (n >= 16 &&
-      memcmp(file, "IMAG", 4) == 0) { /* walk chunks to the pixel data */
-    size_t p = 0;
-    off = 0;
-    while (p + 8 <= n) {
-      uint32_t sz = ((uint32_t) file[p + 4] << 24) | (file[p + 5] << 16) |
-                    (file[p + 6] << 8) | file[p + 7];
-      if (memcmp(file + p, "PDAT", 4) == 0) {
-        off = p + 8;
-        break;
-      }
-      if (sz < 8) {
-        break;
-      }
-      p += sz;
-    }
-    if (off == 0) {
-      fprintf(stderr, "LOAD ERROR : no pixel data in '%s'\n", relpath);
-      return NULL;
-    }
-  }
-  if (n < off + 320 * 240 * 2) {
-    fprintf(stderr, "LOAD ERROR : image '%s' too short\n", relpath);
+  if (w != 320 || h != 240) {
+    fprintf(stderr, "LOAD ERROR : image '%s' is %dx%d, not 320x240\n", name, w, h);
+    sf_png_free(rgb);
     return NULL;
   }
-  for (y = 0; y < 240; y++) {
-    for (x = 0; x < 320; x++) {
-      int half = x >= 160, k = x % 160;
-      const uint8_t *px =
-          file + off +
-          ((size_t) (2 * (y >> 1) + half) * 320 + (size_t) (2 * k + (y & 1))) *
-              2;
-      dst[y * 320 + x] = (uint16_t) ((px[0] << 8) | px[1]);
-    }
+  for (i = 0; i < 320 * 240; i++) {
+    dst[i] = (uint16_t) (((rgb[3 * i] >> 3) << 10) | ((rgb[3 * i + 1] >> 3) << 5) |
+                         (rgb[3 * i + 2] >> 3));
   }
+  sf_png_free(rgb);
   return buffer;
 }
 

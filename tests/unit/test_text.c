@@ -3,10 +3,10 @@
  * `make test-asan` to catch a regression as a memory error). */
 #include "sft.h"
 #include "sf_compat.h"
+#include "sf_video.h"
 
 FontDescriptor *LoadFont(const char *path, int memtype);
 
-static ScreenContext sc;
 static uint16_t *fb;
 static const char *fonts[] = {"Fonts/Message", "Fonts/Menu", "Fonts/Title"};
 
@@ -89,7 +89,7 @@ reveal_all_steps(TextCel *t, int32_t w)
   int32_t i;
   for (i = 0; i <= w; i++) {
     t->tc_CCB->ccb_PRE1 = (t->tc_CCB->ccb_PRE1 & ~1023u) | (uint32_t) i;
-    DrawCels(sc.sc_BitmapItems[0], t->tc_CCB);
+    draw_cels(0, t->tc_CCB);
   }
 }
 
@@ -122,7 +122,7 @@ TEST(test_typewriter_reveal)
   full = count_changed(0, 0, 320, 240, 0);
   memset(fb, 0, 320 * 240 * 2);
   t->tc_CCB->ccb_PRE1 = (t->tc_CCB->ccb_PRE1 & ~1023u) | (uint32_t) (w / 2);
-  DrawCels(sc.sc_BitmapItems[0], t->tc_CCB);
+  draw_cels(0, t->tc_CCB);
   partial = count_changed(0, 0, 320, 240, 0);
   CHECK(full > 50);
   CHECK(partial > 0);
@@ -137,11 +137,11 @@ int
 main(void)
 {
   SFT_BEGIN();
-  if (!OpenGraphics(&sc, 2)) {
-    printf("Bail out! OpenGraphics failed\n");
+  if (!video_open()) {
+    printf("Bail out! video_open failed\n");
     return 1;
   }
-  fb = sc.sc_Bitmaps[0]->bm_Buffer;
+  fb = video_buffer(0);
   RUN(test_fonts_load);
   RUN(test_text_widths);
   RUN(test_typewriter_reveal);

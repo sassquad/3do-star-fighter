@@ -1,6 +1,6 @@
 /*
  * sf_cel.c - software emulation of the 3DO cel engine (the subset Star Fighter
- * uses), plus screen / text shims.
+ * uses).
  *
  * Cel pixel data is expected in the "word-swapped" model: 32-bit words whose
  * numeric value equals the big-endian word that was stored in the file / built
@@ -23,153 +23,31 @@
  * intended percentages; the tables reproduce those percentages exactly).
  */
 #include "sf_compat.h"
-#include "sf_platform.h"
+#include "sf_video.h"
+#include "sf_celtrace.h"
 #include <math.h>
-
-/* ------------------------------------------------------------------ */
-/* Screens                                                             */
-/* ------------------------------------------------------------------ */
-static Bitmap g_bitmaps[2];
-static uint16_t *g_fb[2];
-
-int
-OpenGraphics(ScreenContext *sc, int n)
-{
-  int i;
-  for (i = 0; i < 2; i++) {
-    g_fb[i] = (uint16_t *) calloc(SF_SCREEN_W * SF_SCREEN_H, 2);
-    g_bitmaps[i].bm_Width = SF_SCREEN_W;
-    g_bitmaps[i].bm_Height = SF_SCREEN_H;
-    g_bitmaps[i].bm_Buffer = g_fb[i];
-    sc->sc_Bitmaps[i] = &g_bitmaps[i];
-    sc->sc_Screens[i] = i + 1;
-    sc->sc_BitmapItems[i] = i + 1;
-  }
-  sc->sc_nScreens = n;
-  sc->sc_curScreen = 0;
-  sc->sc_nFrameBufferPages = (SF_SCREEN_W * SF_SCREEN_H * 2 + 4095) / 4096;
-  return plat_init();
-}
-
-void
-CloseGraphics(ScreenContext *sc)
-{
-  (void) sc;
-  plat_shutdown();
-}
-
-static uint16_t *
-fb_for_bitmap(Item bi)
-{
-  return g_fb[(bi - 1) & 1];
-}
-
-static uint16_t *
-fb_for_screen(Item si)
-{
-  return g_fb[(si - 1) & 1];
-}
-
-/* Display brightness, 0..256. On the 3DO the fades work on the screens'
-   colour tables, which keep their value: after FadeToBlack the next screen
-   shown is still black until FadeFromBlack raises it. Presenting at full
-   brightness here flashed each new picture for a frame before it faded in
-   (Fednet logo, menu background, mission pyramid...). */
-static int g_display_br = 256;
-
-int
-DisplayScreen(Item screenItem, Item unused)
-{
-  (void) unused;
-  plat_present(fb_for_screen(screenItem), g_display_br);
-  return 0;
-}
-
-void
-FillRect(Item bi, GrafCon *gc, Rect *r)
-{
-  uint16_t *fb = fb_for_bitmap(bi);
-  int x, y;
-  int x0 = r->rect_XLeft, x1 = r->rect_XRight, y0 = r->rect_YTop,
-      y1 = r->rect_YBottom;
-  if (x0 < 0) {
-    x0 = 0;
-  }
-  if (y0 < 0) {
-    y0 = 0;
-  }
-  if (x1 > SF_SCREEN_W) {
-    x1 = SF_SCREEN_W;
-  }
-  if (y1 > SF_SCREEN_H) {
-    y1 = SF_SCREEN_H;
-  }
-  for (y = y0; y < y1; y++) {
-    for (x = x0; x < x1; x++) {
-      fb[y * SF_SCREEN_W + x] = (uint16_t) gc->gc_FGPen;
-    }
-  }
-}
-
-void
-CopyVRAMPages(Item req, void *dst, void *src, int pages, int mask)
-{
-  (void) req;
-  (void) pages;
-  (void) mask;
-  memcpy(dst, src, SF_SCREEN_W * SF_SCREEN_H * 2);
-}
-
-void
-SetVRAMPages(Item req, void *dst, int value, int pages, int mask)
-{
-  uint16_t *d = (uint16_t *) dst;
-  int i;
-  (void) req;
-  (void) pages;
-  (void) mask;
-  for (i = 0; i < SF_SCREEN_W * SF_SCREEN_H; i++) {
-    d[i] = (uint16_t) value;
-  }
-}
-
-void
-SetScreenColor(Item screen, uint32_t entry)
-{
-  (void) screen;
-  (void) entry;
-}
-
-void
-FadeToBlack(ScreenContext *sc, int frames)
-{
-  int i;
-  uint16_t *fb = g_fb[1 - sc->sc_curScreen];
-  for (i = 1; i <= frames; i++) {
-    plat_present(fb, 256 - 256 * i / frames);
-    WaitVBL(0, 1);
-  }
-  g_display_br = 0; /* stays black until FadeFromBlack */
-}
-
-void
-FadeFromBlack(ScreenContext *sc, int frames)
-{
-  int i;
-  uint16_t *fb = g_fb[1 - sc->sc_curScreen];
-  for (i = 1; i <= frames; i++) {
-    plat_present(fb, 256 * i / frames);
-    WaitVBL(0, 1);
-  }
-  g_display_br = 256;
-}
 
 /* ------------------------------------------------------------------ */
 /* Cel engine                                                          */
 /* ------------------------------------------------------------------ */
 typedef struct {
+  uint8_t a[32], b[32];
+  uint8_t shift; /* 1 if the sum is halved */
+  uint8_t amv;   /* TextLib anti-alias mode (0xBFC0): bg * AMV/8 + pixel */
+  uint8_t identity;
+} PixLUT;
+
+/* LUTs for the current PIXC word (index = P bit), rebuilt when it changes */
+typedef struct {
+  uint32_t pixc;
+  int valid;
+  PixLUT h[2];
+} PixLUTPair;
+
+typedef struct {
   uint16_t plut[32];
   uint32_t pixc;
+  PixLUTPair lut;
   int32_t xpos, ypos, hdx, hdy, vdx, vdy, hddx, hddy;
 } CEState;
 
@@ -196,7 +74,7 @@ get_bits(const uint32_t *row, uint32_t bitpos, int n)
 static inline int
 is_fb_source(const CelData *p)
 {
-  return p == (const CelData *) g_fb[0] || p == (const CelData *) g_fb[1];
+  return p == (const CelData *) video_buffer(0) || p == (const CelData *) video_buffer(1);
 }
 
 /* CCB_USEAV in force for the cel being drawn: 8bpp coded pixels carry a 3-bit
@@ -205,37 +83,35 @@ static int g_useav;
 
 static const int bpp_tab[8] = {0, 1, 2, 4, 6, 8, 16, 16};
 
-/* Decode one source row into 'out' as 17-bit values: bit16 = transparent,
-   bits15-0 colour (+SSB). Returns number of pixels decoded. */
-static void
-decode_row_unpacked(const uint32_t *row, int bpp, int coded, int plutpos,
-                    int skipx, int width, const CEState *st, int force_p,
-                    uint32_t *out)
+/* Decode texel i of an unpacked source row as a 17-bit value: bit16 =
+   transparent, bits15-0 colour (+P bit), plus the AMV in bits 19-17 for 8 bpp
+   coded pixels under CCB_USEAV.  Texels are decoded only once their quad is
+   known to cover a pixel centre (most texels of distant landscape do not). */
+static inline uint32_t
+decode_texel_unpacked(const uint32_t *row, int i, int bpp, int coded,
+                      int plutpos, int skipx, const CEState *st, int force_p)
 {
-  int i;
-  for (i = 0; i < width; i++) {
-    uint32_t px = get_bits(row, (uint32_t) (i + skipx) * bpp, bpp), col, p;
-    if (!coded) {
-      col = px;
-      p = (col >> 15) & 1;
+  uint32_t px = get_bits(row, (uint32_t) (i + skipx) * bpp, bpp), col, p, out;
+  if (!coded) {
+    col = px;
+    p = (col >> 15) & 1;
+  } else {
+    uint32_t idx = px & ((bpp > 5) ? 31 : ((1u << bpp) - 1));
+    col = st->plut[idx];
+    if (!plutpos && bpp >= 6) {
+      p = (px >> (bpp - 1)) & 1;
     } else {
-      uint32_t idx = px & ((bpp > 5) ? 31 : ((1u << bpp) - 1));
-      col = st->plut[idx];
-      if (!plutpos && bpp >= 6) {
-        p = (px >> (bpp - 1)) & 1;
-      } else {
-        p = (col >> 15) & 1;
-      }
-    }
-    if (force_p >= 0) {
-      p = (uint32_t) force_p;
-    }
-    out[i] =
-        (col & 0x7fff) | (p << 15) | ((uint32_t) ((col & 0x7fff) == 0) << 16);
-    if (g_useav && coded && bpp == 8) {
-      out[i] |= ((px >> 5) & 7) << 17; /* AMV */
+      p = (col >> 15) & 1;
     }
   }
+  if (force_p >= 0) {
+    p = (uint32_t) force_p;
+  }
+  out = (col & 0x7fff) | (p << 15) | ((uint32_t) ((col & 0x7fff) == 0) << 16);
+  if (g_useav && coded && bpp == 8) {
+    out |= ((px >> 5) & 7) << 17; /* AMV */
+  }
+  return out;
 }
 
 /* Packed (RLE) rows. 'row' points at the row header. Returns pointer to next
@@ -327,12 +203,51 @@ decode_row_packed(const uint32_t *row, int bpp, int coded, int plutpos,
   return (const uint32_t *) ((const uint8_t *) row + (rowwords + 2) * 4);
 }
 
-static inline uint16_t
-pixproc(uint32_t pix16, uint32_t pixc, uint16_t bg)
+/* Pixel processor, one table set per PIXC half (P-mode).  For each 5-bit
+   channel value c of the cel pixel and b of the frame buffer the hardware
+   computes  min(31, (c*MF/DV + second) >> halve)  with second = b/2DV (frame
+   buffer), c/2DV (source) or 0.  a[] and b[] hold the two terms, so a pixel
+   costs two table reads per channel instead of up to three divisions.  The
+   arithmetic is the same integer arithmetic as before, done once per PIXC. */
+
+static void
+pixlut_build(PixLUT *l, uint32_t half)
 {
-  uint32_t half = ((pix16 & 0x8000) ? (pixc >> 16) : pixc) & 0xffff;
-  if (half == 0xbfc0) { /* TextLib anti-alias: existing pixel scaled by AMV/8,
-                           plus the pixel's colour */
+  static const uint32_t dvt[4] = {16, 2, 4, 8};
+  uint32_t mf = ((half >> 10) & 7) + 1, dv = dvt[(half >> 8) & 3], s2 = (half >> 6) & 3,
+           d2 = 1u << ((half >> 4) & 3), c;
+  l->amv = (half == 0xbfc0);
+  l->shift = (uint8_t) (half & 1);
+  l->identity = (half == 0x1f00); /* MF 8, DV 8, no second source: c */
+  for (c = 0; c < 32; c++) {
+    l->a[c] = (uint8_t) (c * mf / dv + (s2 == 3 ? c / d2 : 0));
+    l->b[c] = (uint8_t) (s2 == 2 ? c / d2 : 0);
+  }
+}
+
+
+static inline const PixLUT *
+pixlut_for(PixLUTPair *pp, uint32_t pixc)
+{
+  if (!pp->valid || pp->pixc != pixc) {
+    pixlut_build(&pp->h[0], pixc & 0xffff);
+    pixlut_build(&pp->h[1], pixc >> 16);
+    pp->pixc = pixc;
+    pp->valid = 1;
+  }
+  return pp->h;
+}
+
+static inline uint16_t
+pixproc(uint32_t pix16, const PixLUT *luts, uint16_t bg)
+{
+  const PixLUT *l = &luts[(pix16 >> 15) & 1];
+  uint32_t r, g, b;
+  if (l->identity) {
+    return (uint16_t) (pix16 & 0x7fff);
+  }
+  if (l->amv) { /* TextLib anti-alias: existing pixel scaled by AMV/8, plus
+                   the pixel's colour */
     uint32_t amv = (pix16 >> 17) & 7, o = 0, sh;
     for (sh = 0; sh <= 10; sh += 5) {
       uint32_t v = ((bg >> sh) & 31) * amv / 8 + ((pix16 >> sh) & 31);
@@ -340,31 +255,22 @@ pixproc(uint32_t pix16, uint32_t pixc, uint16_t bg)
     }
     return (uint16_t) o;
   }
-  uint32_t mf = ((half >> 10) & 7) + 1, dvs = (half >> 8) & 3,
-           s2 = (half >> 6) & 3, d2s = (half >> 4) & 3;
-  static const uint32_t dvt[4] = {16, 2, 4, 8};
-  uint32_t dv = dvt[dvs], d2 = 1u << d2s, out = 0, sh;
-  for (sh = 0; sh <= 10; sh += 5) {
-    uint32_t c = (pix16 >> sh) & 31, v = c * mf / dv, t = 0;
-    if (s2 == 2) {
-      t = ((bg >> sh) & 31) / d2;
-    } else if (s2 == 3) {
-      t = c / d2;
-    }
-    v += t;
-    if (half & 1) {
-      v >>= 1;
-    }
-    if (v > 31) {
-      v = 31;
-    }
-    out |= v << sh;
-  }
-  return (uint16_t) out;
+  r = (uint32_t) (l->a[(pix16 >> 10) & 31] + l->b[(bg >> 10) & 31]) >> l->shift;
+  g = (uint32_t) (l->a[(pix16 >> 5) & 31] + l->b[(bg >> 5) & 31]) >> l->shift;
+  b = (uint32_t) (l->a[pix16 & 31] + l->b[bg & 31]) >> l->shift;
+  return (uint16_t) (((r > 31 ? 31 : r) << 10) | ((g > 31 ? 31 : g) << 5) | (b > 31 ? 31 : b));
+}
+
+/* for the unit tests: the pixel processor on one pixel */
+uint16_t
+sf_cel_pixproc(uint32_t pix, uint32_t pixc, uint16_t bg)
+{
+  PixLUTPair pp = {0, 0, {{{0}}}};
+  return pixproc(pix, pixlut_for(&pp, pixc), bg);
 }
 
 static inline void
-put_px(uint16_t *fb, int x, int y, uint32_t pix, uint32_t pixc, int bgnd)
+put_px(uint16_t *fb, int x, int y, uint32_t pix, const PixLUT *luts, int bgnd)
 {
   uint16_t *d;
   if ((unsigned) x >= SF_SCREEN_W || (unsigned) y >= SF_SCREEN_H) {
@@ -374,40 +280,26 @@ put_px(uint16_t *fb, int x, int y, uint32_t pix, uint32_t pixc, int bgnd)
     return; /* transparent */
   }
   d = &fb[y * SF_SCREEN_W + x];
-  *d = pixproc(pix, pixc, *d);
+  *d = pixproc(pix, luts, *d);
 }
 
+/* Fill the pixels whose centres lie inside the texel quad px/py (corners in
+   drawing order).  x0..x1, y0..y1 is its pixel-centre bounding box, already
+   known to be non-empty and to overlap the screen.  A one-pixel box is drawn
+   without an inside test, as it always was.  The edge function is
+       e = (px[j]-px[i])*(cy-py[i]) - (py[j]-py[i])*(cx-px[i])
+   evaluated with exactly the same float operations as before; only the parts
+   that do not change along a pixel row are computed once per row. */
 static void
-fill_quad(uint16_t *fb, const float *px, const float *py, uint32_t pix,
-          uint32_t pixc, int bgnd)
+fill_quad_box(uint16_t *fb, const float *px, const float *py, int x0, int x1,
+              int y0, int y1, uint32_t pix, const PixLUT *luts, int bgnd)
 {
-  float minx = px[0], maxx = px[0], miny = py[0], maxy = py[0];
-  int i, x0, x1, y0, y1, x, y;
-  for (i = 1; i < 4; i++) {
-    if (px[i] < minx) {
-      minx = px[i];
-    }
-    if (px[i] > maxx) {
-      maxx = px[i];
-    }
-    if (py[i] < miny) {
-      miny = py[i];
-    }
-    if (py[i] > maxy) {
-      maxy = py[i];
-    }
-  }
-  x0 = (int) ceilf(minx - 0.5f);
-  x1 = (int) ceilf(maxx - 0.5f) - 1; /* centres in [min,max) */
-  y0 = (int) ceilf(miny - 0.5f);
-  y1 = (int) ceilf(maxy - 0.5f) - 1;
-  if (x1 < 0 || y1 < 0 || x0 >= SF_SCREEN_W || y0 >= SF_SCREEN_H) {
+  float ex[4], ey[4], a[4];
+  int i, x, y;
+  if (x0 == x1 && y0 == y1) { /* common minified case */
+    put_px(fb, x0, y0, pix, luts, bgnd);
     return;
   }
-  if (x0 == x1 && y0 == y1) {
-    put_px(fb, x0, y0, pix, pixc, bgnd);
-    return;
-  } /* common minified case */
   if (x0 < 0) {
     x0 = 0;
   }
@@ -420,15 +312,34 @@ fill_quad(uint16_t *fb, const float *px, const float *py, uint32_t pix,
   if (y1 >= SF_SCREEN_H) {
     y1 = SF_SCREEN_H - 1;
   }
+  if ((px[0] == px[3] && px[1] == px[2] && py[0] == py[1] && py[2] == py[3]) ||
+      (px[0] == px[1] && px[2] == px[3] && py[0] == py[3] && py[1] == py[2])) {
+    /* Axis-aligned rectangle (unrotated or 90-degree cels: text, HUD, sprites,
+       screen transitions).  Every pixel centre of the bounding box lies inside
+       or on its edges, where the edge functions are all >= 0 or all <= 0, so
+       the inside test passes for all of them: fill the box. */
+    for (y = y0; y <= y1; y++) {
+      for (x = x0; x <= x1; x++) {
+        put_px(fb, x, y, pix, luts, bgnd);
+      }
+    }
+    return;
+  }
+  for (i = 0; i < 4; i++) {
+    int j = (i + 1) & 3;
+    ex[i] = px[j] - px[i];
+    ey[i] = py[j] - py[i];
+  }
   for (y = y0; y <= y1; y++) {
     float cy = y + 0.5f;
+    for (i = 0; i < 4; i++) {
+      a[i] = ex[i] * (cy - py[i]);
+    }
     for (x = x0; x <= x1; x++) {
       float cx = x + 0.5f;
       int neg = 0, pos = 0;
       for (i = 0; i < 4; i++) {
-        int j = (i + 1) & 3;
-        float e =
-            (px[j] - px[i]) * (cy - py[i]) - (py[j] - py[i]) * (cx - px[i]);
+        float e = a[i] - ey[i] * (cx - px[i]);
         if (e < 0) {
           neg = 1;
         } else if (e > 0) {
@@ -436,24 +347,64 @@ fill_quad(uint16_t *fb, const float *px, const float *py, uint32_t pix,
         }
       }
       if (!(neg && pos)) {
-        put_px(fb, x, y, pix, pixc, bgnd);
+        put_px(fb, x, y, pix, luts, bgnd);
       }
     }
   }
 }
 
-static void
-draw_one(uint16_t *fb, CCB *c, CEState *st)
+static inline int
+min4i(int a, int b, int c, int d)
+{
+  int m = a < b ? a : b;
+  m = m < c ? m : c;
+  return m < d ? m : d;
+}
+
+static inline int
+max4i(int a, int b, int c, int d)
+{
+  int m = a > b ? a : b;
+  m = m > c ? m : c;
+  return m > d ? m : d;
+}
+
+/* pixel-centre index of a coordinate: the first pixel whose centre is >= c */
+static inline int
+centre_ceil(float c)
+{
+  return (int) ceilf(c - 0.5f);
+}
+
+/* One cel, decoded from its CCB and the cel engine state: everything the
+   rasteriser needs, as plain typed fields. */
+typedef struct {
+  const uint32_t *src; /* first row, after any preamble words */
+  int fbsrc;           /* source is a frame buffer (16 bpp rows of 320) */
+  int packed;          /* rows are RLE packets */
+  int natural;         /* packed without PRE1: each row gives its own width */
+  int bpp, coded, plutpos, skipx;
+  int force_p; /* -1, or the P-mode every pixel uses */
+  int bgnd;    /* colour 000 is drawn rather than transparent */
+  int width;   /* texels per row (0 when natural) */
+  int height;
+  int stride_words;     /* words per unpacked row */
+  const CEState *st;    /* PLUT */
+  const PixLUT *luts;   /* pixel processor for P-mode 0 and 1 */
+  /* screen position of texel corner (u, v):
+       (X, Y) + v * (Vx, Vy) + u * ((H0x, H0y) + v * (Dx, Dy)) */
+  float X, Y, H0x, H0y, Vx, Vy, Dx, Dy;
+} CelJob;
+
+/* Apply a CCB to the engine state (the LD* flags load values that persist
+   along the list) and describe the cel to draw.  Returns 0 if there is
+   nothing to draw (SKIP, or a preamble the engine does not draw). */
+static int
+cel_prepare(const CCB *c, CEState *st, CelJob *j)
 {
   uint32_t fl = c->ccb_Flags, pre0, pre1;
   const CelData *src = c->ccb_SourcePtr;
-  int bpp, coded, packed, plutpos, force_p = -1, skipx, width, height, bgnd;
-  int v, u, stride_words = 0;
-  uint32_t rowbuf[MAXW + 8];
-  int fbsrc = is_fb_source(src);
-  int natural =
-      0; /* packed cel with no PRE1: row widths are not known up front */
-  float X, Y;
+  int fbsrc = is_fb_source(src), natural = 0;
 
   if (fl & CCB_LDSIZE) {
     st->hdx = c->ccb_HDX;
@@ -497,53 +448,111 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
     }
   }
   if (fl & CCB_SKIP) {
-    return;
+    return 0;
   }
+  j->src = src;
+  j->fbsrc = fbsrc;
+  j->natural = natural;
+  j->st = st;
+  j->luts = pixlut_for(&st->lut, st->pixc);
+  j->force_p = -1;
   if ((fl & CCB_POVER_MASK) == 0x100) {
-    force_p = 0;
+    j->force_p = 0;
   } else if ((fl & CCB_POVER_MASK) == 0x180) {
-    force_p = 1;
+    j->force_p = 1;
   }
-  coded = !(pre0 & 0x10);
-  bpp = bpp_tab[pre0 & 7];
-  packed = (fl & CCB_PACKED) != 0;
-  plutpos = (fl & CCB_PLUTPOS) != 0;
-  skipx = (int) ((pre0 >> 24) & 15);
+  j->coded = !(pre0 & 0x10);
+  j->bpp = bpp_tab[pre0 & 7];
+  j->packed = (fl & CCB_PACKED) != 0;
+  j->plutpos = (fl & CCB_PLUTPOS) != 0;
+  j->skipx = (int) ((pre0 >> 24) & 15);
   /* PRE0 bit 31 is LITERAL and bit 30 is BGND (3DO Portfolio cel format);
      the preamble has no flip bits - cels are flipped by negative HDX/VDY.
      These bits were once taken for horizontal/vertical flips, which turned
      the 6-bit map land cels (far ring) upside down within each cell and
      mirrored the 32x32 polygon textures. */
-  bgnd = (fl & CCB_BGND) || (pre0 & PRE0_BGND); /* draw 000 pixels */
-  height = (int) ((pre0 >> 6) & 0x3ff) + 1;
-  width = natural ? 0 : (int) (pre1 & 0x7ff) + 1 - skipx;
-  if (bpp == 0 || (!natural && width <= 0) || width > MAXW || height > MAXH) {
-    return;
+  j->bgnd = (fl & CCB_BGND) || (pre0 & PRE0_BGND); /* draw 000 pixels */
+  j->height = (int) ((pre0 >> 6) & 0x3ff) + 1;
+  j->width = natural ? 0 : (int) (pre1 & 0x7ff) + 1 - j->skipx;
+  if (j->bpp == 0 || (!natural && j->width <= 0) || j->width > MAXW || j->height > MAXH) {
+    return 0;
   }
   if (natural) {
-    stride_words = 0;
-  } else if (bpp >= 8) {
-    stride_words = (int) ((pre1 >> 16) & 0x3ff) + 2;
+    j->stride_words = 0;
+  } else if (j->bpp >= 8) {
+    j->stride_words = (int) ((pre1 >> 16) & 0x3ff) + 2;
   } else {
-    stride_words = (int) ((pre1 >> 24) & 0xff) + 2;
+    j->stride_words = (int) ((pre1 >> 24) & 0xff) + 2;
   }
+  j->H0x = st->hdx / 1048576.0f;
+  j->H0y = st->hdy / 1048576.0f;
+  j->Vx = st->vdx / 65536.0f;
+  j->Vy = st->vdy / 65536.0f;
+  j->Dx = st->hddx / 1048576.0f;
+  j->Dy = st->hddy / 1048576.0f;
+  j->X = st->xpos / 65536.0f;
+  j->Y = st->ypos / 65536.0f;
+  return 1;
+}
+
+/* Draw one prepared cel: each source texel is the quad spanned by its four
+   corners; the pixels whose centres it covers get its colour through the
+   pixel processor.  Texels are drawn in order, later ones over earlier ones. */
+static void
+cel_render(uint16_t *fb, const CelJob *j)
+{
+  const uint32_t *src = j->src;
+  const CEState *st = j->st;
+  const PixLUT *luts = j->luts;
+  const int bpp = j->bpp, coded = j->coded, packed = j->packed, plutpos = j->plutpos;
+  const int force_p = j->force_p, skipx = j->skipx, height = j->height, bgnd = j->bgnd;
+  const int fbsrc = j->fbsrc, natural = j->natural, stride_words = j->stride_words;
+  int width = j->width, v, u;
+  uint32_t rowbuf[MAXW + 8];
   {
-    float H0x = st->hdx / 1048576.0f, H0y = st->hdy / 1048576.0f;
-    float Vx = st->vdx / 65536.0f, Vy = st->vdy / 65536.0f;
-    float Dx = st->hddx / 1048576.0f, Dy = st->hddy / 1048576.0f;
+    const float H0x = j->H0x, H0y = j->H0y, Vx = j->Vx, Vy = j->Vy, Dx = j->Dx, Dy = j->Dy;
+    const float X = j->X, Y = j->Y;
     const uint32_t *rowp = src;
-    X = st->xpos / 65536.0f;
-    Y = st->ypos / 65536.0f;
     for (v = 0; v < height; v++) {
-      int vv = v;
+      int vv = v, lazy = 0, u0 = 0;
+      const uint32_t *rowdata = NULL;
       float Hx = H0x + vv * Dx, Hy = H0y + vv * Dy;
       float rx = X + vv * Vx, ry = Y + vv * Vy;
       float Hx2 = H0x + (vv + 1) * Dx, Hy2 = H0y + (vv + 1) * Dy;
       float rx2 = X + (vv + 1) * Vx, ry2 = Y + (vv + 1) * Vy;
+      float tx0, ty0, bx0, by0;
+      int ctx0, cty0, cbx0, cby0;
+      if (!natural) {
+        /* Whole-row rejection.  Along a row the corner coordinates
+           rx + u*Hx etc. are monotonic in u (float multiply and add round
+           monotonically), so the row's extreme corners are those at u = 0
+           and u = width.  If they all fall between the same two pixel-centre
+           rows (or columns), or off the screen, no texel of the row can
+           cover a pixel centre: skip it without decoding. */
+        int ya = centre_ceil(ry + u0 * Hy), yb = centre_ceil(ry + width * Hy);
+        int yc = centre_ceil(ry2 + u0 * Hy2), yd = centre_ceil(ry2 + width * Hy2);
+        int ymin = min4i(ya, yb, yc, yd), ymax = max4i(ya, yb, yc, yd);
+        int skip = ymin == ymax || ymax <= 0 || ymin >= SF_SCREEN_H;
+        if (!skip) {
+          int xa = centre_ceil(rx + u0 * Hx), xb = centre_ceil(rx + width * Hx);
+          int xc = centre_ceil(rx2 + u0 * Hx2), xd = centre_ceil(rx2 + width * Hx2);
+          int xmin = min4i(xa, xb, xc, xd), xmax = max4i(xa, xb, xc, xd);
+          skip = xmin == xmax || xmax <= 0 || xmin >= SF_SCREEN_W;
+        }
+        if (skip) {
+          if (packed && !fbsrc) {
+            rowp = (const uint32_t *) ((const uint8_t *) rowp +
+                                       (get_bits(rowp, 0, bpp < 8 ? 8 : 16) + 2) * 4);
+          } else if (!fbsrc) {
+            rowp += stride_words;
+          }
+          continue;
+        }
+      }
       if (fbsrc) {
         const uint16_t *r = (const uint16_t *) src + (size_t) v * SF_SCREEN_W;
         for (u = 0; u < width; u++) {
-          rowbuf[u] = (r[u] & 0xffff) | (((r[u] & 0x7fff) == 0) ? 0 : 0);
+          rowbuf[u] = r[u] & 0xffff; /* never transparent */
         }
       } else if (packed) {
         rowp = decode_row_packed(rowp, bpp, coded, plutpos, skipx,
@@ -552,43 +561,89 @@ draw_one(uint16_t *fb, CCB *c, CEState *st)
           width = g_packed_px; /* this row's pixel count */
         }
       } else {
-        decode_row_unpacked(rowp, bpp, coded, plutpos, skipx, width, st,
-                            force_p, rowbuf);
+        lazy = 1;
+        rowdata = rowp;
         rowp += stride_words;
       }
+      /* texel u spans corners u and u+1 of this row (top) and the next (bottom):
+         P(u,v) = (rx + u*Hx, ry + u*Hy), P(u,v+1) = (rx2 + u*Hx2, ry2 + u*Hy2) */
+      tx0 = rx + u0 * Hx;
+      ty0 = ry + u0 * Hy;
+      bx0 = rx2 + u0 * Hx2;
+      by0 = ry2 + u0 * Hy2;
+      ctx0 = centre_ceil(tx0);
+      cty0 = centre_ceil(ty0);
+      cbx0 = centre_ceil(bx0);
+      cby0 = centre_ceil(by0);
       for (u = 0; u < width; u++) {
-        int uu = u;
+        int uu = u, x0, x1, y0, y1, ctx1, cty1, cbx1, cby1;
         float px[4], py[4];
-        px[0] = rx + uu * Hx;
-        py[0] = ry + uu * Hy;
+        uint32_t pix;
+        px[0] = tx0;
+        py[0] = ty0;
         px[1] = rx + (uu + 1) * Hx;
         py[1] = ry + (uu + 1) * Hy;
         px[2] = rx2 + (uu + 1) * Hx2;
         py[2] = ry2 + (uu + 1) * Hy2;
-        px[3] = rx2 + uu * Hx2;
-        py[3] = ry2 + uu * Hy2;
-        if (((rowbuf[u] >> 16) & 1) && !bgnd) {
+        px[3] = bx0;
+        py[3] = by0;
+        /* corners u+1 are the next texel's corners u: keep them, and their
+           pixel-centre indices */
+        tx0 = px[1];
+        ty0 = py[1];
+        bx0 = px[2];
+        by0 = py[2];
+        ctx1 = centre_ceil(px[1]);
+        cty1 = centre_ceil(py[1]);
+        cbx1 = centre_ceil(px[2]);
+        cby1 = centre_ceil(py[2]);
+        /* bounding box of the pixel centres: ceil is monotonic, so taking it
+           per corner gives the same box as taking it of the min / max */
+        x0 = min4i(ctx0, ctx1, cbx1, cbx0);
+        x1 = max4i(ctx0, ctx1, cbx1, cbx0) - 1;
+        y0 = min4i(cty0, cty1, cby1, cby0);
+        y1 = max4i(cty0, cty1, cby1, cby0) - 1;
+        ctx0 = ctx1;
+        cty0 = cty1;
+        cbx0 = cbx1;
+        cby0 = cby1;
+        if (x1 < x0 || y1 < y0 || x1 < 0 || y1 < 0 || x0 >= SF_SCREEN_W || y0 >= SF_SCREEN_H) {
+          continue; /* covers no pixel centre, or off screen */
+        }
+        pix = lazy ? decode_texel_unpacked(rowdata, u, bpp, coded, plutpos, skipx, st, force_p)
+                   : rowbuf[u];
+        if (((pix >> 16) & 1) && !bgnd) {
           continue;
         }
-        fill_quad(fb, px, py, rowbuf[u], st->pixc, bgnd);
+        fill_quad_box(fb, px, py, x0, x1, y0, y1, pix, luts, bgnd);
       }
     }
   }
 }
 
 void
-DrawCels(Item bitmapItem, CCB *ccb)
+draw_cels(int n, CCB *ccb)
 {
   CEState st;
-  uint16_t *fb = fb_for_bitmap(bitmapItem);
+  uint16_t *fb = video_buffer(n);
+  int trace = celtrace_active();
+  if (trace) {
+    celtrace_begin(n & 1, fb, ccb, video_buffer(0), video_buffer(1));
+  }
   memset(&st, 0, sizeof st);
   st.pixc = 0x1f001f00u;
   while (ccb) {
     uint32_t fl = ccb->ccb_Flags;
-    draw_one(fb, ccb, &st);
+    CelJob job;
+    if (cel_prepare(ccb, &st, &job)) {
+      cel_render(fb, &job);
+    }
     if (fl & CCB_LAST) {
       break;
     }
     ccb = ccb->ccb_NextPtr;
+  }
+  if (trace) {
+    celtrace_end(fb);
   }
 }

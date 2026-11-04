@@ -31,10 +31,8 @@
 
 /* External Variables */
 
-extern ScreenContext *screen;
+#include "sf_video.h"
 extern ubyte *backdrop;
-extern Item VBLIOReq;
-extern Item VRAMIOReq;
 extern cel_celdata cel_quad;
 extern menu_info menu_status;
 extern menu menus[MAX_MENUS];

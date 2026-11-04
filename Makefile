@@ -9,11 +9,15 @@
 #   make test-asan       unit tests and quick scenarios built with AddressSanitizer + UBSan
 #   make test-full       everything, including the long scenarios and the ASan run
 #   make rebless [SCENARIOS="a b"]   re-record goldens after an intentional change
+#   make celtrace        record the cel lists of a few in-game frames into build/celtraces/
+#   make celbench [REPEAT=n]   replay them: same framebuffers as recorded? and time the cel engine
+#   make restamp [SCENARIOS="a b"]   after a lossless SF_Resources conversion: record the new resources in the
+#                        goldens, but only for scenarios whose frames and audio are still identical
 #   make test-performance [REPEAT=n] [ONLY=text]   frames per second of the game engine (scenarios marked performance: yes)
 #   RES=/path/to/SF_Resources selects the resources (default: $$SF_RESOURCES, else ./SF_Resources)
 #
 # Build variables: OBJDIR=dir BINDIR=dir (where objects / binaries go), SAN=address,undefined (sanitizers),
-#   WERROR=1 (warnings are errors), COVERAGE=1 (gcov instrumentation).
+#   WERROR=1 (warnings are errors), COVERAGE=1 (gcov instrumentation), SSE41=0 (x86 CPUs without SSE4.1).
 #
 # Windows (MinGW-w64), either natively under MSYS2/MinGW or cross-compiled from Linux:
 #   make CC=x86_64-w64-mingw32-gcc SDL2_PREFIX=/path/to/SDL2/x86_64-w64-mingw32
@@ -21,14 +25,26 @@
 #    as in an MSYS2 shell.)  Produces starfighter.exe.  WINGUI=1 links as a GUI app (no console window).
 #
 CC      ?= cc
-CFLAGS  ?= -O2 -g
+CFLAGS  ?= -O3 -g
 # armcc's plain 'char' is unsigned; the game relies on that.
 # These flags are required for correctness and are applied even if CFLAGS is given on the command line.
-override CFLAGS += -funsigned-char -fwrapv -fno-strict-aliasing -Wall \
+# -ffp-contract=off: the cel engine places pixels with float arithmetic; fused multiply-adds (allowed
+# by default on FMA targets such as aarch64 or -march=native) would move pixels and break the goldens.
+override CFLAGS += -funsigned-char -fwrapv -fno-strict-aliasing -ffp-contract=off -Wall \
            -Werror=implicit-function-declaration -Wno-unused-function -Isrc
 LDLIBS  += -lm
-# MinGW detection: compiler triplet contains "mingw" (cross or native)
 MACHINE := $(shell $(CC) -dumpmachine 2>/dev/null)
+# x86: SSE4.1 is the minimum CPU (2008 and later).  It gives the cel engine single-instruction float
+# rounding (roundss), about a third of the game's speed.  SSE41=0 builds for older CPUs.
+SSE41 ?= 1
+ifneq (,$(and $(filter 1,$(SSE41)),$(or $(findstring x86_64,$(MACHINE)),$(findstring i686,$(MACHINE)),$(findstring i386,$(MACHINE)),$(findstring i586,$(MACHINE)))))
+  override CFLAGS += -msse4.1
+  # 32-bit x86 would otherwise do float maths on the x87 (80-bit), unlike every 64-bit build
+  ifeq (,$(findstring x86_64,$(MACHINE)))
+    override CFLAGS += -mfpmath=sse
+  endif
+endif
+# MinGW detection: compiler triplet contains "mingw" (cross or native)
 ifneq (,$(or $(findstring mingw,$(MACHINE)),$(filter Windows_NT,$(OS))))
   SDL2_PREFIX := C:\MinGW
   WIN32 := 1
@@ -134,7 +150,13 @@ $(BINDIR)/tools/sf_mksave$(EXE): tests/tools/sf_mksave.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
-unit-tests: $(BINDIR)/tools/sf_mksave$(EXE)
+# cel-list replay / benchmark (tests/tools/celbench.c, see src/sf_celtrace.h)
+$(BINDIR)/tools/celbench$(EXE): tests/tools/celbench.c tests/ref/sf_cel_ref.c $(LIBCORE)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Itests -c -o $(BINDIR)/tools/celbench.o $<
+	$(CC) $(LDFLAGS) -o $@ $(BINDIR)/tools/celbench.o $(LIBCORE) $(LDLIBS)
+
+unit-tests: $(BINDIR)/tools/sf_mksave$(EXE) $(BINDIR)/tools/celbench$(EXE)
 unit-tests:
 ifneq ($(HEADLESS),1)
 	$(error unit-tests needs HEADLESS=1)
@@ -154,6 +176,12 @@ test-full:
 	$(RUNTEST) full
 rebless:
 	$(RUNTEST) rebless $(SCENARIOS)
+restamp:
+	$(RUNTEST) restamp $(SCENARIOS)
+celtrace:
+	$(RUNTEST) celtrace $(if $(ONLY),--only $(ONLY))
+celbench:
+	$(RUNTEST) celbench $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY))
 test-performance:
 	$(RUNTEST) performance $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY))
 
@@ -161,4 +189,4 @@ clean:
 	rm -rf $(OBJDIR) build starfighter starfighter-headless starfighter.exe starfighter-headless.exe
 
 -include $(DEPS)
-.PHONY: all clean unit-tests test test-asan test-full rebless test-performance
+.PHONY: all clean unit-tests test test-asan test-full rebless restamp celtrace celbench test-performance

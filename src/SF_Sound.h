@@ -19,14 +19,14 @@ typedef struct sample_list {
 // DEFINITION FOR SAMPLE INFORMATION
 
 typedef struct sample_info {
-  Item sample_item;
+  int32_t sample_item;
   int32_t priority;
 } sample_info;
 
 // DEFINITION FOR ATTACHMENT INFORMATION
 
 typedef struct attachment_info {
-  Item attachment_item;
+  int32_t attachment_item;
   int32_t sample_playing;
 } attachment_info;
 

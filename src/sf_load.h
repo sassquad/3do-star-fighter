@@ -17,9 +17,9 @@ void *load_fileat(void *buffer, const char *fmt, ...);
 /* Load and convert big-endian 32-bit words to host words ("word-swapped"
  * model). */
 void *load_fileat_words(void *buffer, const char *fmt, ...);
-/* Load a 320x240 16-bit big-endian framebuffer dump (3DO two-bank interleave)
-   into a linear host-order buffer. */
-void *load_image_raw(void *buffer, const char *relpath);
+/* Load the 320x240 image "<relpath>.png" into a linear host-order RGB555
+   buffer (NULL if missing or not 320x240). */
+void *load_image_png(void *buffer, const char *relpath);
 /* strip the resource root prefix from a path built with RESOURCES_ROOT */
 const char *sf_rel(const char *p);
 #endif

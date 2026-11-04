@@ -12,7 +12,6 @@
 
 // External Variables
 
-extern Item VBLIOReq;
 extern pyramid pyramids[4];
 
 // Function Prototypes
