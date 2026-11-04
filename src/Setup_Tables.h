@@ -34,6 +34,20 @@
 extern int32_t cosine_table[2048];
 extern int32_t pex_table[16384];
 extern int32_t pex_table_near[2048];
+
+/* Perspective factor for a camera-space depth, given the value the game
+   looked up in pex_table (steps of 64 depth units) or pex_table_near (steps
+   of 32).  Both approximate 12582912 / depth.  In the sub-pixel 3D view
+   (cel_subpix, sf_compat.h) the two tables' different rounding shows as
+   seams between neighbouring objects (each object picks its table), so
+   there the factor is computed exactly.  Below 1024 the tables' own values
+   stand; at scale 1 nothing changes. */
+static inline int32_t
+pex_fix(int32_t depth, int32_t table_value)
+{
+  return (cel_subpix && depth >= 1024) ? (int32_t) (12582912 / depth)
+                                       : table_value;
+}
 extern int32_t rotated_coords[3200][3];
 
 extern char height_map[256][256];

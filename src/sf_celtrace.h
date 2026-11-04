@@ -7,22 +7,25 @@
  * the renderer still produces the recorded framebuffers).  Format (host byte
  * order, all fields uint32 unless noted):
  *
- *   "SFCELTR1"                         8-byte magic
+ *   "SFCELTR1"                         8-byte magic (scale 1: 320x240 frame buffers)
+ *   or "SFCELTR2" scale                at other scales: frame buffers are
+ *                                      320*scale x 240*scale ("W*H" below)
  *   per list:
  *     'LIST' frame bitmap(0/1)
- *     framebuffers 0 and 1 before     2 x 320*240 uint16 (a cel may use the other one as source)
+ *     framebuffers 0 and 1 before     2 x W*H uint16 (a cel may use the other one as source)
  *     count
  *     per CCB: flags xpos ypos hdx hdy vdx vdy hddx hddy pixc pre0 pre1 width height
  *              srckind (0 none, 1 data, 2 framebuffer 0, 3 framebuffer 1)
  *              nbytes, data[nbytes] (padded to a multiple of 4)
  *              hasplut, plut[16] if hasplut
- *     'DONE' framebuffer after        320*240 uint16
+ *     'DONE' framebuffer after        W*H uint16
  */
 #ifndef SF_CELTRACE_H
 #define SF_CELTRACE_H
 #include "sf_compat.h"
 
 #define CELTRACE_MAGIC "SFCELTR1"
+#define CELTRACE_MAGIC2 "SFCELTR2"
 #define CELTRACE_LIST 0x5453494cu /* 'LIST' */
 #define CELTRACE_DONE 0x454e4f44u /* 'DONE' */
 

@@ -31,6 +31,29 @@ iabs(int32_t v)
   return v < 0 ? -v : v;
 }
 
+
+/* Half width of the beam at one end: direction factor r (0 or +-128) times
+   that end's perspective factor.  At scale 1 the original rounds down and
+   turns 0 into 1, so a beam is at least one pixel thick each way (a small
+   negative value rounds down to -1).  In sub-pixel units (cel_subpix) the
+   same minimum is one logical pixel either way, so beams keep their apparent
+   width at every scale; wider beams keep their sub-pixel precision. */
+static int32_t
+half_width(int32_t r, int32_t f)
+{
+  int32_t k = MULS(r, f) >> (17 - cel_subpix);
+  if (!cel_subpix) {
+    return k == 0 ? 1 : k;
+  }
+  if (k >= 0 && k < SUBPIX(1)) {
+    return SUBPIX(1);
+  }
+  if (k < 0 && k > -SUBPIX(1)) {
+    return -SUBPIX(1);
+  }
+  return k;
+}
+
 void
 plot_laser(void *laserp)
 {
@@ -57,12 +80,13 @@ plot_laser(void *laserp)
     clip_3d_line(p1, p2);
   }
 
-  f2 = pex_table[(p2[1] & ~63) >> 6]; /* scale for end 2 (asm r11) */
-  f1 = pex_table[(p1[1] & ~63) >> 6]; /* scale for end 1 (asm r12) */
-  s2x = MULS(p2[0], f2) >> 16;
-  s2y = MULS(p2[2], f2) >> 16;
-  s1x = MULS(p1[0], f1) >> 16;
-  s1y = MULS(p1[2], f1) >> 16;
+  f2 = pex_fix(p2[1], pex_table[(p2[1] & ~63) >> 6]); /* end 2 (asm r11) */
+  f1 = pex_fix(p1[1], pex_table[(p1[1] & ~63) >> 6]); /* end 1 (asm r12) */
+  /* screen coordinates keep cel_subpix fractional bits above scale 1 */
+  s2x = MULS(p2[0], f2) >> (16 - cel_subpix);
+  s2y = MULS(p2[2], f2) >> (16 - cel_subpix);
+  s1x = MULS(p1[0], f1) >> (16 - cel_subpix);
+  s1y = MULS(p1[2], f1) >> (16 - cel_subpix);
   dx = s2x - s1x;
   dy = s2y - s1y;
   ax = iabs(dx);
@@ -81,22 +105,10 @@ plot_laser(void *laserp)
   if (dy < 0) {
     r5 = -r5;
   }
-  k0 = MULS(r5, f2) >> 17;
-  k1 = MULS(r6, f2) >> 17;
-  k2 = MULS(r5, f1) >> 17;
-  k3 = MULS(r6, f1) >> 17;
-  if (k0 == 0) {
-    k0 = 1;
-  }
-  if (k1 == 0) {
-    k1 = 1;
-  }
-  if (k2 == 0) {
-    k2 = 1;
-  }
-  if (k3 == 0) {
-    k3 = 1;
-  }
+  k0 = half_width(r5, f2);
+  k1 = half_width(r6, f2);
+  k2 = half_width(r5, f1);
+  k3 = half_width(r6, f1);
   x[0] = s2x + k0;
   y[0] = s2y + k1;
   x[1] = s1x + k2;
@@ -105,17 +117,20 @@ plot_laser(void *laserp)
   y[2] = s1y - k3;
   x[3] = s2x - k0;
   y[3] = s2y - k1;
-  if (y[0] > 120 && y[1] > 120 && y[2] > 120 && y[3] > 120) {
-    return;
-  }
-  if (y[0] < -120 && y[1] < -120 && y[2] < -120 && y[3] < -120) {
-    return;
-  }
-  if (x[0] < -160 && x[1] < -160 && x[2] < -160 && x[3] < -160) {
-    return;
-  }
-  if (x[0] > 160 && x[1] > 160 && x[2] > 160 && x[3] > 160) {
-    return;
+  {
+    const int32_t xl = SUBPIX(160), yl = SUBPIX(120);
+    if (y[0] > yl && y[1] > yl && y[2] > yl && y[3] > yl) {
+      return;
+    }
+    if (y[0] < -yl && y[1] < -yl && y[2] < -yl && y[3] < -yl) {
+      return;
+    }
+    if (x[0] < -xl && x[1] < -xl && x[2] < -xl && x[3] < -xl) {
+      return;
+    }
+    if (x[0] > xl && x[1] > xl && x[2] > xl && x[3] > xl) {
+      return;
+    }
   }
   cel_quad.x_pos0 = x[0];
   cel_quad.y_pos0 = y[0];

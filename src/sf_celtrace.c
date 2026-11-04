@@ -35,7 +35,13 @@ init(void)
     fprintf(stderr, "SF_CELTRACE: cannot write '%s'\n", p);
     exit(2);
   }
-  fwrite(CELTRACE_MAGIC, 1, 8, g_out);
+  if (sf_scale == 1) {
+    fwrite(CELTRACE_MAGIC, 1, 8, g_out);
+  } else {
+    uint32_t n = (uint32_t) sf_scale;
+    fwrite(CELTRACE_MAGIC2, 1, 8, g_out);
+    fwrite(&n, 4, 1, g_out);
+  }
   g_state = 1;
 }
 
@@ -129,8 +135,8 @@ celtrace_begin(int fbidx, const uint16_t *fb, const CCB *list, const uint16_t *f
   w32(th_frames());
   w32((uint32_t) fbidx);
   (void) fb;
-  fwrite(fb0, 2, SF_SCREEN_W * SF_SCREEN_H, g_out);
-  fwrite(fb1, 2, SF_SCREEN_W * SF_SCREEN_H, g_out);
+  fwrite(fb0, 2, (size_t) sf_fb_w * sf_fb_h, g_out);
+  fwrite(fb1, 2, (size_t) sf_fb_w * sf_fb_h, g_out);
   for (c = list; c; c = c->ccb_NextPtr) {
     n++;
     if (c->ccb_Flags & CCB_LAST) {
@@ -174,6 +180,6 @@ void
 celtrace_end(const uint16_t *fb)
 {
   w32(CELTRACE_DONE);
-  fwrite(fb, 2, SF_SCREEN_W * SF_SCREEN_H, g_out);
+  fwrite(fb, 2, (size_t) sf_fb_w * sf_fb_h, g_out);
   fflush(g_out);
 }

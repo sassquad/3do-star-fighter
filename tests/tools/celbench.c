@@ -16,7 +16,7 @@
 #include "../ref/sf_cel_ref.c"
 #include <time.h>
 
-#define NPIX (SF_SCREEN_W * SF_SCREEN_H)
+#define NPIX ((size_t) sf_fb_w * sf_fb_h)
 
 typedef struct {
   uint32_t frame, fbidx, count;
@@ -85,7 +85,15 @@ main(int argc, char **argv)
     die("cannot open trace");
   }
   rd(magic, 8, f);
-  if (memcmp(magic, CELTRACE_MAGIC, 8)) {
+  if (!memcmp(magic, CELTRACE_MAGIC2, 8)) {
+    /* recorded at another scale: draw at that scale too */
+    if (!video_set_scale((int) rd32(f))) {
+      die("bad scale in trace");
+    }
+    if (use_ref) {
+      die("--ref: the reference renderer only draws at scale 1");
+    }
+  } else if (memcmp(magic, CELTRACE_MAGIC, 8)) {
     die("not a cel trace");
   }
   for (;;) {
@@ -190,7 +198,7 @@ main(int argc, char **argv)
         }
         if (bad++ < 10) {
           printf("list %zu (frame %u): framebuffer differs, first at (%d,%d) got %04x want %04x\n", i,
-                 L->frame, p % SF_SCREEN_W, p / SF_SCREEN_W, fb[p], L->after[p]);
+                 L->frame, p % sf_fb_w, p / sf_fb_w, fb[p], L->after[p]);
         }
       }
     }

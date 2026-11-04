@@ -41,6 +41,14 @@ controls (including a built-in key of a control the file does not list), the gam
 `config.txt`. If audio crashes, set `SDL_AUDIODRIVER` (the Windows build defaults to `directsound`). Saves go to `$SF_SAVEDIR`,
 else `$XDG_DATA_HOME/starfighter`, else `~/.local/share/starfighter`.
 
+**Resolution.** `SCALE = n` in `config.txt` (1 to 4, default 1) draws the game at 320x240 times n
+(2 = 640x480, 4 = 1280x960); `SF_SCALE=n` in the environment overrides it. The 3D view is projected at
+the higher resolution with sub-pixel precision: polygon edges, landscape, lasers and lock-on boxes get
+sharper and distant land shows more texture detail, at the same size on screen. The HUD, cockpit,
+menus, map, text, backdrops and videos are the original art and keep their size and look (each pixel
+becomes n x n). The game plays exactly the same at every scale. Higher scales cost CPU time: see
+`PORTING_NOTES.md` §12 for measured frame rates.
+
 ## Resources
 
 `SF_Resources` is the game's data. The backdrops (`Images/*.png`) and fonts (`Fonts/*.png` + `.txt`)
@@ -62,7 +70,7 @@ starts is ignored until released).
     make test            # build checks, unit tests, scripted scenarios vs goldens, SDL smoke (~2 min)
     make test-asan       # the same under AddressSanitizer + UBSan
     make test-full       # everything, including the long scenarios (~6 min)
-    make test-performance  # frames per second of the game engine, per scenario
+    make test-performance  # frames per second of the game engine, per scenario (SCALE=n: at scale n)
     make celtrace; make celbench   # record in-game cel lists; replay them (exact output + timing)
 
 Needs Python 3 and `SF_Resources` (`RES=/path/to/SF_Resources`); see `tests/README.md`.
@@ -70,6 +78,7 @@ Needs Python 3 and `SF_Resources` (`RES=/path/to/SF_Resources`); see `tests/READ
 Both builds read test settings from the environment (`src/sf_testhooks.h`): `SF_SCRIPT=file`
 (lines `first_tick last_tick BUTTON[+BUTTON]`), `SF_MAXFRAMES=n`, `SF_DUMP=dir`, `SF_DUMP_EVERY=n`,
 `SF_HASH=file`, `SF_STATE=file`, `SF_AUDIO_DUMP=file.wav`, `SF_RECORD=file` (record your own play as
-a script), `SF_WATCHDOG=seconds` (prints a backtrace if the game hangs), `SF_TRACE_PAD=1`. The
+a script), `SF_WATCHDOG=seconds` (prints a backtrace if the game hangs), `SF_TRACE_PAD=1`,
+`SF_SCALE=n` (render at scale n). The
 headless build (`make HEADLESS=1`) runs on a virtual clock and is fully deterministic;
 `tools/headless-smoke.sh /path/to/SF_Resources /tmp/out` dumps frames of a short session.

@@ -85,6 +85,19 @@ VARIANTS = {
 }
 
 PASS, FAIL, SKIP, WARN = 'PASS', 'FAIL', 'SKIP', 'WARN'
+KEEP_AUDIO = set()  # scenarios whose scale-1 audio is kept for the scaled runs (set by cmd_suite)
+
+# Scenarios that are also run at a higher SF_SCALE (internal resolution 320x240 times n), per
+# suite: (scale, scenario names or None for all of the suite's scenarios).  Each scaled run must
+# play exactly like the scale-1 run (state log and audio identical), every frame before the first
+# in-flight frame must be the scale-1 frame blown up (menus, videos, text are drawn in whole
+# logical pixels), and its frames must match its own golden (tests/golden/<name>/scale<n>/).
+SCALED = {
+    'quick': [(2, ['boot-to-menu', 'new-game-takeoff', 'weapons-and-views'])],
+    'full': [(2, None), (4, ['new-game-takeoff', 'weapons-and-views', 'mission-space', 'mission-ice'])],
+}
+# also under ASan (full suite)
+ASAN_SCALED = [(4, ['weapons-and-views', 'mission-ice'])]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -216,22 +229,23 @@ def diff_image(a, b, w, h):
     return bytes(out), n
 
 
-def contact_sheet(frames, path, cols=6):
-    """frames: list of (label, rgb 320x240).  Half-size thumbnails in a grid."""
+def contact_sheet(frames, path, cols=6, scale=1):
+    """frames: list of (label, rgb 320x240 times scale).  160x120 thumbnails in a grid."""
     if not frames:
         return
     tw, th = 160, 120
+    w, step = 320 * scale, 2 * scale
     rows = (len(frames) + cols - 1) // cols
     W, H = cols * tw, rows * th
     out = bytearray(W * H * 3)
     for k, (_, rgb) in enumerate(frames):
         ox, oy = (k % cols) * tw, (k // cols) * th
         for y in range(th):
-            src = rgb[(2 * y) * 320 * 3:(2 * y + 1) * 320 * 3]
+            src = rgb[(step * y) * w * 3:(step * y + 1) * w * 3]
             row = bytearray(tw * 3)
-            row[0::3] = src[0::6]
-            row[1::3] = src[1::6]
-            row[2::3] = src[2::6]
+            row[0::3] = src[0::3 * step]
+            row[1::3] = src[1::3 * step]
+            row[2::3] = src[2::3 * step]
             o = ((oy + y) * W + ox) * 3
             out[o:o + tw * 3] = row
     write_png(path, W, H, bytes(out))
@@ -577,8 +591,10 @@ def prepare_savedir(scn, savedir, mksave):
     return None
 
 
-def run_scenario(scn, binary, res, variant, mksave, tag=''):
+def run_scenario(scn, binary, res, variant, mksave, tag='', scale=1):
     """Runs one scenario; returns a dict with everything the checks need."""
+    if scale > 1:
+        variant += '-x%d' % scale
     rundir = os.path.join(BUILD, 'runs', variant, scn.name + tag)
     shutil.rmtree(rundir, ignore_errors=True)
     os.makedirs(os.path.join(rundir, 'frames'))
@@ -600,6 +616,8 @@ def run_scenario(scn, binary, res, variant, mksave, tag=''):
         'SF_DUMP': os.path.join(rundir, 'frames'), 'SF_DUMP_EVERY': str(scn.checkpoint),
         'SF_SAVEDIR': savedir,
     })
+    if scale > 1:
+        env['SF_SCALE'] = str(scale)
     if scn.audio:
         env['SF_AUDIO_DUMP'] = os.path.join(rundir, 'audio.wav')
     t0 = time.time()
@@ -630,10 +648,13 @@ def read_state(path):
     return rows
 
 
-def read_hashes(path):
+def read_hashes(path, column=1):
+    """Frame hashes from an SF_HASH file; column 2 is the block hash of scaled runs ('-' if the
+    frame is not made of whole logical pixels)."""
     try:
         with open(path) as f:
-            return [p[1] for p in (line.split() for line in f) if len(p) == 2]
+            return [p[column] if len(p) > column else None
+                    for p in (line.split() for line in f) if len(p) >= 2]
     except OSError:
         return None
 
@@ -699,8 +720,9 @@ class ExpectEnv(dict):
                     max=max, min=min, any=any, all=all, len=len, sum=sum, abs=abs)
 
 
-def golden_dir(scn):
-    return os.path.join(GOLDEN, scn.name)
+def golden_dir(scn, scale=1):
+    d = os.path.join(GOLDEN, scn.name)
+    return d if scale == 1 else os.path.join(d, 'scale%d' % scale)
 
 
 def read_meta(path):
@@ -766,7 +788,7 @@ def check_scenario(scn, info, variant, results, manifest, compare_golden=True):
         sheet = os.path.join(REPORT, 'img', '%s-%s-sheet.png' % (variant, scn.name))
         contact_sheet([(f, read_ppm(p)[2]) for f, p in frames], sheet)
         info['sheet'] = sheet
-    if audio and not KEEP:
+    if audio and not KEEP and scn.name not in KEEP_AUDIO:
         try:
             os.remove(os.path.join(info['rundir'], 'audio.wav'))
         except OSError:
@@ -847,7 +869,13 @@ def diff_images(scn, info, first_frame):
 def write_golden(scn, info, manifest):
     gdir = golden_dir(scn)
     old = read_hashes(os.path.join(gdir, 'frames.txt'))
-    shutil.rmtree(gdir, ignore_errors=True)
+    # replace the scale-1 golden; the scaleN/ goldens beside it are kept
+    shutil.rmtree(os.path.join(gdir, 'checkpoints'), ignore_errors=True)
+    for fn in ('frames.txt', 'audio.txt', 'meta.txt'):
+        try:
+            os.remove(os.path.join(gdir, fn))
+        except OSError:
+            pass
     os.makedirs(os.path.join(gdir, 'checkpoints'))
     shutil.copy(os.path.join(info['rundir'], 'frames.txt'), os.path.join(gdir, 'frames.txt'))
     for frame, ppm in checkpoint_frames(info['rundir']):
@@ -865,6 +893,221 @@ def write_golden(scn, info, manifest):
     if old is None:
         return 'new'
     return 'unchanged' if old == new else 'changed'
+
+
+def write_scaled_golden(scn, info, scale, manifest):
+    """Frame hashes only: the checkpoint images of the scale-1 golden show the same scenes."""
+    gdir = golden_dir(scn, scale)
+    old = read_hashes(os.path.join(gdir, 'frames.txt'))
+    shutil.rmtree(gdir, ignore_errors=True)
+    os.makedirs(gdir)
+    with open(os.path.join(info['rundir'], 'frames.txt')) as f, \
+            open(os.path.join(gdir, 'frames.txt'), 'w') as g:
+        for line in f:  # frame number and hash; the block-hash column is checked against scale 1
+            p = line.split()
+            if len(p) >= 2:
+                g.write('%s %s\n' % (p[0], p[1]))
+    with open(os.path.join(gdir, 'meta.txt'), 'w') as f:
+        f.write('scenario: %s\nscale: %d\nframes: %d\nresources: %s\ncompiler: %s\ncflags: %s\n'
+                'recorded: %s\n' % (scn.name, scale, scn.frames, manifest, compiler_id(), TEST_CFLAGS,
+                                     time.strftime('%Y-%m-%d %H:%M:%S')))
+    new = read_hashes(os.path.join(gdir, 'frames.txt'))
+    if old is None:
+        return 'new'
+    return 'unchanged' if old == new else 'changed'
+
+
+def upscale_diff(rgb1, w1, h1, rgb, w, h, scale):
+    """Fraction of the pixels of the scaled image rgb (w x h) that differ from the scale-1 image
+    rgb1 (w1 x h1) blown up by 'scale'."""
+    if w != w1 * scale or h != h1 * scale:
+        return 1.0
+    bad = 0
+    for y in range(h):
+        src = rgb1[(y // scale) * w1 * 3:(y // scale + 1) * w1 * 3]
+        big = b''.join(src[i:i + 3] * scale for i in range(0, len(src), 3))
+        row = rgb[y * w * 3:(y + 1) * w * 3]
+        if row != big:
+            bad += sum(1 for i in range(0, len(row), 3) if row[i:i + 3] != big[i:i + 3])
+    return bad / float(w * h)
+
+
+def audio_difference(path_a, path_b):
+    """(fraction of stereo frames that differ, 'first-last s'), or (None, '') if a file is missing
+    or the lengths differ."""
+    import array
+    import wave
+    try:
+        wa, wb = wave.open(path_a), wave.open(path_b)
+        a, b = array.array('h'), array.array('h')
+        a.frombytes(wa.readframes(wa.getnframes()))
+        b.frombytes(wb.readframes(wb.getnframes()))
+    except (OSError, EOFError, wave.Error):
+        return None, ''
+    if len(a) != len(b) or not a:
+        return None, ''
+    diff = [i for i in range(0, len(a), 2) if a[i] != b[i] or a[i + 1] != b[i + 1]]
+    if not diff:
+        return 0.0, 'identical'
+    return len(diff) / (len(a) / 2.0), '%.2f-%.2f s' % (diff[0] / 88200.0, diff[-1] / 88200.0)
+
+
+def scaled_runs(suite, scns):
+    """[(scale, scenario)] to run at a higher scale for a suite, from SCALED."""
+    out = []
+    for scale, names in SCALED.get(suite, []):
+        out += [(scale, s) for s in scns if names is None or s.name in names]
+    return out
+
+
+def check_scaled(scn, info, base, scale, variant, results, manifest, compare_golden=True):
+    """A scenario run at SF_SCALE=scale, against the scale-1 run 'base' of the same build."""
+    group = 'scaled/%s-x%d' % (variant, scale)
+    if info.get('error'):
+        results.add(Result(group, scn.name, FAIL, info['error']))
+        return
+    rc, err, secs = info['rc'], info['stderr'], info['secs']
+    ok = rc == 0 and 'max frames reached' in err
+    results.add(Result(group, scn.name + ': runs to frame %d' % scn.frames, PASS if ok else FAIL,
+                       '' if ok else 'exit %s\n%s' % (rc, err[-3000:]), secs))
+    san = sanitizer_report(err)
+    if san:
+        results.add(Result(group, scn.name + ': sanitizer', FAIL, san))
+    if not ok:
+        return
+    # 1. the game plays exactly as at scale 1: the resolution must not leak into game logic
+    def text(path):
+        try:
+            with open(path) as f:
+                return f.read()
+        except OSError:
+            return None
+    s1, sn = text(os.path.join(base['rundir'], 'state.tsv')), text(os.path.join(info['rundir'], 'state.tsv'))
+    same = s1 is not None and s1 == sn
+    detail = ''
+    if not same and s1 and sn:
+        a, b = s1.splitlines(), sn.splitlines()
+        i = next((k for k, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+        detail = 'state log first differs at line %d:\n  x1: %s\n  x%d: %s' % (
+            i + 1, a[i] if i < len(a) else '(end)', scale, b[i] if i < len(b) else '(end)')
+    results.add(Result(group, scn.name + ': plays as at scale 1 (state log identical)',
+                       PASS if same else FAIL, detail))
+    if scn.audio:
+        # The same sounds at the same frames.  The mixed audio is usually identical; it may differ
+        # where a frame draws more than 1024 cels at one scale and not the other: the cel list is
+        # then drawn mid-frame and screen_intercept() waits for the frame delay there, so a sound
+        # started later in that frame is mixed one frame later.  (Sub-pixel culling drops some
+        # zero-area land quads that whole pixels kept.)  Allow such shifts in up to 2 % of the audio.
+        a1 = base.get('audio')
+        an = wav_stats(os.path.join(info['rundir'], 'audio.wav'))
+        name = scn.name + ': audio as at scale 1'
+        if a1 and an and a1['sha256'] == an['sha256']:
+            results.add(Result(group, name, PASS, 'identical'))
+        else:
+            frac, span = audio_difference(os.path.join(base['rundir'], 'audio.wav'),
+                                          os.path.join(info['rundir'], 'audio.wav'))
+            ok = frac is not None and frac <= 0.02
+            results.add(Result(group, name, PASS if ok else FAIL,
+                               'not captured' if frac is None else
+                               '%.2f %% of the audio differs (%s)' % (100 * frac, span)))
+        if not KEEP:
+            try:
+                os.remove(os.path.join(info['rundir'], 'audio.wav'))
+            except OSError:
+                pass
+    # 2. Before the mission starts the game draws 2D screens (menus, text, videos, backdrops) in
+    #    logical pixels: the scaled frame is the scale-1 frame blown up.  Exactly so wherever the
+    #    scaled frame is made of whole logical pixels (block hash = scale-1 hash); quads with
+    #    diagonal edges (menu box bevels, zooming boxes, screen transitions) are drawn finer, so
+    #    the checkpoint images may differ from the blown-up scale-1 image in a few pixels.
+    rows = read_state(os.path.join(info['rundir'], 'state.tsv'))
+    flight = next((r['frame'] for r in rows if r['status'] == 1), None)
+    h1 = read_hashes(os.path.join(base['rundir'], 'frames.txt')) or []
+    hb = read_hashes(os.path.join(info['rundir'], 'frames.txt'), column=2) or []
+    upto = min(len(h1), len(hb), (flight - 1) if flight else len(hb))
+    whole = [i for i in range(upto) if hb[i] not in (None, '-')]
+    bad = [i + 1 for i in whole if hb[i] != h1[i]]
+    name = scn.name + ': 2D frames before flight are the scale-1 frames blown up'
+    if not whole:
+        results.add(Result(group, name, SKIP, 'no frames in whole logical pixels before flight'))
+    else:
+        results.add(Result(group, name, PASS if not bad else FAIL,
+                           '%d of %d frames before flight are in whole logical pixels' % (len(whole), upto)
+                           if not bad else '%d of %d frames differ, first at frame %d'
+                           % (len(bad), len(whole), bad[0])))
+    worst, nck, where = 0.0, 0, ''
+    base_ck = dict(checkpoint_frames(base['rundir']))
+    for frame, ppm in checkpoint_frames(info['rundir']):
+        if frame > upto or frame not in base_ck:
+            continue
+        w1, h1_, rgb1 = read_ppm(base_ck[frame])
+        w, h, rgb = read_ppm(ppm)
+        frac = upscale_diff(rgb1, w1, h1_, rgb, w, h, scale)
+        nck += 1
+        if frac > worst:
+            worst, where = frac, ' (frame %d)' % frame
+    if nck:
+        ok = worst <= 0.005
+        results.add(Result(group, scn.name + ': checkpoints before flight match the blown-up scale-1 images',
+                           PASS if ok else FAIL, '%d checkpoints, at most %.3f%% of pixels differ%s'
+                           % (nck, 100 * worst, where)))
+    # 3. own golden
+    if scn.golden and compare_golden:
+        gdir = golden_dir(scn, scale)
+        want = read_hashes(os.path.join(gdir, 'frames.txt'))
+        got = read_hashes(os.path.join(info['rundir'], 'frames.txt')) or []
+        meta = read_meta(os.path.join(gdir, 'meta.txt'))
+        name = scn.name + ': frames match golden'
+        if want is None:
+            results.add(Result(group, name, FAIL, 'no golden yet - run: make rebless SCENARIOS=%s' % scn.name))
+        elif meta.get('resources') and meta['resources'] != manifest and not COMPARE_ACROSS:
+            results.add(Result(group, name, WARN, 'goldens were recorded with different SF_Resources: '
+                               'not compared'))
+        else:
+            first = next((i for i, (a, b) in enumerate(zip(want, got)) if a != b), None)
+            if first is None and len(want) == len(got):
+                results.add(Result(group, name, PASS, '%d frames' % len(got)))
+            else:
+                if first is None:
+                    first = min(len(want), len(got))
+                ndiff = sum(1 for a, b in zip(want, got) if a != b) + abs(len(want) - len(got))
+                results.add(Result(group, name, FAIL, 'first differs at frame %d; %d of %d frames differ'
+                                   % (first + 1, ndiff, max(len(want), len(got)))))
+    frames = checkpoint_frames(info['rundir'])
+    if frames:
+        os.makedirs(os.path.join(REPORT, 'img'), exist_ok=True)
+        sheet = os.path.join(REPORT, 'img', '%s-x%d-%s-sheet.png' % (variant, scale, scn.name))
+        contact_sheet([(f, read_ppm(p)[2]) for f, p in frames], sheet, scale=scale)
+        info['sheet'] = sheet
+
+
+def run_scaled(runs, binary, res, variant, mksave, jobs, results, manifest, base_infos):
+    """Run (scale, scenario) pairs and check them against the scale-1 runs in base_infos (run
+    here first if missing)."""
+    need = [s for _, s in runs if s.name not in base_infos]
+    seen = set()
+    need = [s for s in need if not (s.name in seen or seen.add(s.name))]
+    if need:
+        base_infos = dict(base_infos)
+        base_infos.update(run_scenarios(need, binary, res, variant, mksave, jobs, Results(), manifest,
+                                        compare_golden=False))
+
+    def one(pair):
+        scale, s = pair
+        return scale, s, run_scenario(s, binary, res, variant, mksave, scale=scale)
+
+    infos = {}
+    with cf.ThreadPoolExecutor(jobs) as ex:
+        for scale, s, info in ex.map(one, runs):
+            check_scaled(s, info, base_infos[s.name], scale, variant, results, manifest)
+            infos['%s-x%d' % (s.name, scale)] = info
+    if not KEEP:  # the scale-1 audio kept for the comparison
+        for _, s in runs:
+            try:
+                os.remove(os.path.join(base_infos[s.name]['rundir'], 'audio.wav'))
+            except OSError:
+                pass
+    return infos
 
 
 def run_scenarios(scns, binary, res, variant, mksave, jobs, results, manifest, compare_golden=True):
@@ -960,7 +1203,8 @@ def keys_file_check(binary, res, rundir, first_err, results):
     except OSError:
         text = ''
     ok = 'keys: wrote' in first_err and all(
-        re.search(r'(?m)^%s\s*=' % c, text) for c in ('UP', 'DOWN', 'A', 'START', 'X', 'LS', 'RS'))
+        re.search(r'(?m)^%s\s*=' % c, text) for c in ('UP', 'DOWN', 'A', 'START', 'X', 'LS', 'RS')) and \
+        re.search(r'(?m)^SCALE\s*=\s*1\s*$', text) and 'display: scale 1 (320x240)' in first_err
     results.add(Result('sdl', 'writes the default keyboard layout to config.txt', PASS if ok else FAIL,
                        '' if ok else 'stderr: %s\nconfig.txt:\n%s' % (first_err[-500:], text[:800])))
     env = clean_env({'SDL_VIDEODRIVER': 'dummy', 'SDL_AUDIODRIVER': 'dummy', 'SF_MAXFRAMES': '5',
@@ -974,15 +1218,23 @@ def keys_file_check(binary, res, rundir, first_err, results):
         except subprocess.TimeoutExpired:
             return None, 'timed out'
 
-    rc, err = run_with('# edited\nSTART = Return\nLS = Q, W\n')
-    ok = rc == 0 and 'keys: loaded config.txt' in err
-    results.add(Result('sdl', 'reads a valid edited config.txt', PASS if ok else FAIL,
+    rc, err = run_with('# edited\nSTART = Return\nLS = Q, W\nSCALE = 2\n')
+    ok = rc == 0 and 'keys: loaded config.txt' in err and 'display: scale 2 (640x480)' in err
+    results.add(Result('sdl', 'reads a valid edited config.txt (SCALE = 2 renders at 640x480)',
+                       PASS if ok else FAIL, '' if ok else 'exit %s\n%s' % (rc, err[-1000:])))
+    env['SF_SCALE'] = '3'
+    rc, err = run_with('SCALE = 2\n')
+    del env['SF_SCALE']
+    ok = rc == 0 and 'display: scale 3 (960x720)' in err
+    results.add(Result('sdl', 'SF_SCALE overrides SCALE in config.txt', PASS if ok else FAIL,
                        '' if ok else 'exit %s\n%s' % (rc, err[-1000:])))
-    rc, err = run_with('# edited\nSTART = A\nfire = G\nRS = NoSuchKey\n')
+    rc, err = run_with('# edited\nSTART = A\nfire = G\nRS = NoSuchKey\nSCALE = 7\n')
     wanted = ['config.txt:3: unknown control', 'config.txt:4: unknown key name',
-              "key 'A' is used for both START (line 2) and LS", 'config.txt has 3 problems']
+              'config.txt:5: SCALE must be a whole number from 1 to 4',
+              "key 'A' is used for both START (line 2) and LS", 'config.txt has 4 problems']
     ok = rc == 1 and all(w in err for w in wanted) and 'max frames reached' not in err
-    results.add(Result('sdl', 'refuses a config.txt with invalid or shared keys', PASS if ok else FAIL,
+    results.add(Result('sdl', 'refuses a config.txt with invalid or shared keys or a bad SCALE',
+                       PASS if ok else FAIL,
                        '' if ok else 'exit %s (expected 1)\nmissing: %s\n%s'
                        % (rc, [w for w in wanted if w not in err], err[-1000:])))
 
@@ -1063,6 +1315,8 @@ def cmd_suite(suite, args):
     print('   resources manifest %s (%d files)' % (manifest, nfiles), flush=True)
     scns = load_scenarios(args.only)
     quick = [s for s in scns if s.suite == 'quick']
+    KEEP_AUDIO.update(s.name for _, s in scaled_runs(suite, scns))
+    KEEP_AUDIO.update(name for _, names in ASAN_SCALED for name in names)
     if suite in ('quick', 'full'):
         print('-- build checks', flush=True)
         lint_checks(results)
@@ -1090,6 +1344,11 @@ def cmd_suite(suite, args):
             for s in det:
                 if s.name in infos:
                     determinism_check(s, headless, res, mksave, results, infos[s.name])
+            runs = scaled_runs(suite, torun)
+            if runs:
+                print('-- scenarios at higher scales (%d)' % len(runs), flush=True)
+                infos.update(run_scaled(runs, headless, res, 'headless', mksave, jobs, results, manifest,
+                                        infos))
         if sdl:
             print('-- SDL build smoke test', flush=True)
             sdl_smoke(sdl, res, results)
@@ -1102,6 +1361,10 @@ def cmd_suite(suite, args):
             torun = quick if suite == 'asan' else scns
             print('-- scenarios under ASan (%d)' % len(torun), flush=True)
             ainfos = run_scenarios(torun, asan, res, 'asan', mksave, jobs, results, manifest)
+            if suite == 'full':
+                runs = [(n, s) for n, names in ASAN_SCALED for s in torun if s.name in names]
+                print('-- scenarios at higher scales under ASan (%d)' % len(runs), flush=True)
+                ainfos.update(run_scaled(runs, asan, res, 'asan', mksave, jobs, results, manifest, ainfos))
             infos.update({'asan/' + k: v for k, v in ainfos.items()})
         known_issues(results)
     title = 'Star Fighter tests (%s)' % suite
@@ -1148,6 +1411,28 @@ def cmd_rebless(args):
                 continue
             what = write_golden(s, info, manifest)
             print('  %-24s %s' % (s.name, what), flush=True)
+            if not KEEP:
+                try:
+                    os.remove(os.path.join(info['rundir'], 'audio.wav'))
+                except OSError:
+                    pass
+    # the scaled goldens of the same scenarios (every scale any suite runs them at)
+    runs = sorted(set((scale, s.name) for scale, s in scaled_runs('full', scns) + scaled_runs('quick', scns)))
+    byname = dict((s.name, s) for s in scns)
+
+    def one_scaled(pair):
+        scale, name = pair
+        s = byname[name]
+        return scale, s, run_scenario(s, headless, res, 'headless', mksave, scale=scale)
+
+    with cf.ThreadPoolExecutor(args.jobs) as ex:
+        for scale, s, info in ex.map(one_scaled, runs):
+            label = '%s x%d' % (s.name, scale)
+            if info.get('error') or info.get('rc') != 0:
+                print('  %-24s NOT recorded: %s' % (label, info.get('error') or 'exit %s' % info.get('rc')))
+                status = 1
+                continue
+            print('  %-24s %s' % (label, write_scaled_golden(s, info, scale, manifest)), flush=True)
             if not KEEP:
                 try:
                     os.remove(os.path.join(info['rundir'], 'audio.wav'))
@@ -1300,7 +1585,7 @@ def cmd_make_fixtures(args):
     return 0
 
 
-def perf_run(scn, binary, res, mksave):
+def perf_run(scn, binary, res, mksave, scale=1):
     """One timed run: only the script, frame limit and save directory are set, so no frame dumps,
     hashes, state log or audio capture add to the time.  Returns (wall s, cpu s) or an error."""
     import resource
@@ -1317,11 +1602,13 @@ def perf_run(scn, binary, res, mksave):
     with open(script, 'w') as f:
         f.write('\n'.join(scn.script) + '\n')
     env = clean_env({'SF_SCRIPT': script, 'SF_MAXFRAMES': str(scn.frames), 'SF_SAVEDIR': savedir,
-                     'SF_WATCHDOG': str(scn.watchdog)})
+                     'SF_WATCHDOG': str(scn.watchdog * scale * scale)})
+    if scale > 1:
+        env['SF_SCALE'] = str(scale)
     before = resource.getrusage(resource.RUSAGE_CHILDREN)
     t0 = time.perf_counter()
     try:
-        rc, out, errtext = run([binary, res], env=env, timeout=scn.watchdog + 60)
+        rc, out, errtext = run([binary, res], env=env, timeout=scn.watchdog * scale * scale + 60)
     except subprocess.TimeoutExpired:
         return None, 'timed out'
     wall = time.perf_counter() - t0
@@ -1350,7 +1637,10 @@ def cmd_performance(args):
         print('no scenarios marked "performance: yes"%s' % (' matching ' + args.only if args.only else ''))
         return 1
     repeat = max(1, args.repeat)
-    print('-- performance: %d scenarios x %d runs, one at a time' % (len(scns), repeat), flush=True)
+    scale = args.scale
+    print('-- performance: %d scenarios x %d runs, one at a time%s'
+          % (len(scns), repeat, ', scale %d (%dx%d)' % (scale, 320 * scale, 240 * scale) if scale > 1 else ''),
+          flush=True)
     rows, failed = [], 0
     hdr = '%-22s %7s %10s %10s %10s %7s' % ('scenario', 'frames', 'fps(med)', 'fps(best)', 'cpu fps',
                                             'spread')
@@ -1358,7 +1648,7 @@ def cmd_performance(args):
     for scn in scns:
         walls, cpus, err = [], [], None
         for _ in range(repeat):
-            t, err = perf_run(scn, binary, res, mksave)
+            t, err = perf_run(scn, binary, res, mksave, scale)
             if t is None:
                 break
             walls.append(t[0])
@@ -1368,7 +1658,7 @@ def cmd_performance(args):
             failed += 1
             continue
         med, best, cmed = statistics.median(walls), min(walls), statistics.median(cpus)
-        row = dict(scenario=scn.name, frames=scn.frames, fps_median=scn.frames / med,
+        row = dict(scenario=scn.name + ('@x%d' % scale if scale > 1 else ''), frames=scn.frames, fps_median=scn.frames / med,
                    fps_best=scn.frames / best, cpu_fps=scn.frames / cmed if cmed else 0.0,
                    spread=100.0 * (max(walls) - best) / best, wall_median=med, cpu_median=cmed)
         rows.append(row)
@@ -1377,7 +1667,7 @@ def cmd_performance(args):
               flush=True)
     if rows:
         frames = sum(r['frames'] for r in rows)
-        total = dict(scenario='TOTAL', frames=frames,
+        total = dict(scenario='TOTAL' + ('@x%d' % scale if scale > 1 else ''), frames=frames,
                      fps_median=frames / sum(r['wall_median'] for r in rows),
                      fps_best=frames / sum(r['frames'] / r['fps_best'] for r in rows),
                      cpu_fps=frames / sum(r['cpu_median'] for r in rows), spread=0.0)
@@ -1418,6 +1708,8 @@ def main():
     ap.add_argument('--only')
     ap.add_argument('-j', '--jobs', type=int, default=ncpu())
     ap.add_argument('--keep', action='store_true')
+    ap.add_argument('--scale', type=int, default=1, choices=[1, 2, 3, 4],
+                    help='performance: render at this SF_SCALE')
     ap.add_argument('--repeat', type=int, default=3)
     ap.add_argument('--compare-across-resources', action='store_true')
     args = ap.parse_args()

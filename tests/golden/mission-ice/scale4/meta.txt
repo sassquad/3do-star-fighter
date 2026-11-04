@@ -1,0 +1,7 @@
+scenario: mission-ice
+scale: 4
+frames: 1800
+resources: f3f4f05fba0afcb4
+compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+cflags: -O3 -g
+recorded: 2026-11-04 19:07:08

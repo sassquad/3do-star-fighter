@@ -14,7 +14,10 @@
  *   SF_DUMP=dir         write frames as dir/fNNNNNN.ppm ...
  *   SF_DUMP_EVERY=n     ... every n-th presented frame (default 1)
  *   SF_HASH=file        one line per presented frame: "<frame> <fnv1a-64 hex>"
- *                       of the displayed RGB image (same pixels as SF_DUMP)
+ *                       of the displayed RGB image (same pixels as SF_DUMP);
+ *                       above scale 1 a third column holds the hash of the
+ *                       image at one pixel per sf_scale x sf_scale block if
+ *                       every block is one colour, else '-'
  *   SF_STATE=file       one tab-separated line per presented frame with key
  *                       game state (header line first; see sf_testhooks.c)
  *   SF_AUDIO_DUMP=file  write the mixed audio output as a 44.1 kHz stereo WAV
@@ -22,6 +25,8 @@
  *                       SF_SCRIPT file that can be replayed
  *   SF_WATCHDOG=sec     print a backtrace and _exit(3) if still running
  *   SF_TRACE_PAD=1      log scripted button presses to stderr
+ *   SF_SCALE=n          render at n times 320x240 (1 to 4); overrides the
+ *                       SCALE setting of config.txt in the SDL build
  */
 #ifndef SF_TESTHOOKS_H
 #define SF_TESTHOOKS_H
@@ -42,6 +47,8 @@ void th_record_pad(uint32_t mask, uint32_t now_ms);
 void th_audio(const int16_t *pcm, int frames);
 /* Whether SF_AUDIO_DUMP is active. */
 int th_audio_wanted(void);
+/* SF_SCALE (1..4), or 0 if it is not set. */
+int th_scale(void);
 /* Number of presented frames so far. */
 uint32_t th_frames(void);
 int th_last_brightness(void); /* brightness of the last present, 0..256 */

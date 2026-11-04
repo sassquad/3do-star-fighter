@@ -219,14 +219,25 @@ video_play(char *video_file)
         cinepak_decode(cp, frames[k].data, frames[k].len);
       }
       cur = due;
-      { /* centre the picture on the 320x240 screen */
+      { /* centre the picture on the 320x240 (logical) screen */
         const uint16_t *src = cinepak_pixels(cp);
         int row, ox = (SF_SCREEN_W - vw) / 2, oy = (SF_SCREEN_H - vh) / 2;
         for (row = 0; row < vh; row++) {
           memcpy(screenbuf + (size_t) (oy + row) * SF_SCREEN_W + ox,
                  src + (size_t) row * vw, (size_t) vw * sizeof(uint16_t));
         }
-        plat_present(screenbuf, 256);
+        if (sf_scale == 1) {
+          plat_present(screenbuf, 256);
+        } else { /* blow the 320x240 picture up to the frame-buffer size */
+          static uint16_t *big;
+          if (!big) {
+            big = (uint16_t *) malloc((size_t) sf_fb_w * sf_fb_h * 2);
+          }
+          if (big) {
+            video_upscale(big, screenbuf);
+            plat_present(big, 256);
+          }
+        }
       }
     }
     if (new_button_pressed(&held) || plat_quit_requested()) {

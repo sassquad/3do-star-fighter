@@ -248,3 +248,85 @@ replay them for exact-output checks and quiet timing), `tests/unit/test_cel_diff
 random cel lists against `tests/ref/sf_cel_ref.c`, a frozen copy of the renderer before the work), and
 `tests/run.py full --compare-across-resources` / `make restamp` for lossless resource conversions.
 
+
+## 12. Internal resolution scale (November 2026)
+
+Plan: the project doc "upscale plan". `SCALE = n` in `config.txt` (or `SF_SCALE=n`) renders at
+320x240 times n, n = 1 to 4. At n = 1 every golden is unchanged.
+
+**How it works.** The game still computes every position on the 320x240 logical screen.
+
+* *Frame buffers and renderer.* The two frame buffers are `sf_fb_w x sf_fb_h` (`sf_videosys.c`).
+  `cel_prepare` multiplies each cel's geometry by n after the CCB has been applied to the engine
+  state (state carried between cels stays logical). Axis-aligned cels at whole logical pixels come
+  out exactly as the 1x picture blown up, so the HUD, menus, map, text and sprites keep their size
+  and look. Frame-buffer-source cels (blur and zoom transitions) use one texel per physical pixel
+  (`X' = nX, H' = H, V' = V, D' = D/n`): their 3DO preamble could not describe a 1280-pixel row.
+  Backdrops (`video_copy_in`) and video frames are blown up n x n.
+* *Sub-pixel 3D view.* While `draw_frame()` runs at n > 1, `cel_subpix` = 3: the projection keeps
+  three fractional bits, `MULS(x, pex) >> 13` instead of `>> 16`. The 32-bit product is the original
+  one, so it wraps exactly where the ARM code did. The cel builders shift by 3 less (`SHP` in
+  `SF_ARMCell.c`, `arm_plotsky`), so every CCB field has the same magnitude as at n = 1 and no new
+  overflow is possible. The 3D code's screen-space constants (clip limits +-160/+-120, sprite
+  offsets, star and planet bounds) go through `SUBPIX()`.
+* *Kept apparent sizes.* Lasers and lock-on box lines keep a minimum of one logical pixel (laser
+  half widths at least one logical pixel either way, matching the whole-pixel rounding); the sky and
+  the black under-horizon polygon are laid out in whole logical pixels as before and moved by the
+  horizon point's sub-pixel fraction.
+
+**Overflow review** (measured over the flight scenarios before implementation, see the plan):
+
+| Quantity | At n = 1 | What was done for n > 1 |
+|---|---|---|
+| projection `x * pex` (int32) | wraps for 0.17 % of land nodes (authentic, in the goldens) | product unchanged; only the final shift changes |
+| CCB fields (16.16 / 12.20) | max 2^28.6 | unchanged magnitudes (sub-pixel bits shifted in, not added) |
+| land facing tests `cross1/cross2` | 10 wraps in 15 M | 64-bit products when `cel_subpix`; 32-bit (with wraps) kept at n = 1 |
+| object facing test `cross3` | max 2^25 | 64-bit when `cel_subpix` |
+| frame-buffer cel preamble (10-bit word offset) | 320 px rows | not encoded: scaled inside the renderer |
+
+**Found while implementing.**
+* `rotate_land()` projects the land nodes before `draw_land()`, so sub-pixel mode has to cover all of
+  `draw_frame()` (first try only covered `draw_land()`: the land came out at 1/8 size).
+* `pex_table` (steps of 64 depth units) and `pex_table_near` (steps of 32) round differently, and
+  each object picks one by its own distance. Neighbouring objects (the pipe sections by the launch
+  pad) were up to half a logical pixel apart; whole pixels hid it, sub-pixel positions showed a seam.
+  In sub-pixel mode the factor is now exact, `12582912 / depth` (`pex_fix`); the same faint seam at
+  1x is the original behaviour and stays.
+* Rendering does not feed back into the game: water heights are updated before a land section's
+  facing test, and lock-on and collision work in camera space. The scaled test runs check this: the
+  state log is identical at 1x, 2x and 4x in every scenario.
+* The mixed audio can differ by about a frame for one sound. When a frame draws more than 1024 cels,
+  `screen_intercept()` draws the list part-way through the frame and waits for the frame delay there;
+  sounds started after that point in the frame are mixed one frame later. Sub-pixel culling drops
+  some zero-area land quads that whole pixels kept (in `mission-chemical` 968 instead of 1027 cels in
+  four frames), so the mid-frame wait can happen at one scale and not the other. Inaudible; the
+  scaled tests allow such differences in up to 2 % of the audio (0.7 % there, 0 elsewhere).
+
+**Tests.** `tests/README.md`, "Scaled runs": every scenario at 2x and four at 4x (two under ASan)
+must play exactly as at 1x, draw their 2D screens as the 1x screens blown up, and match their own
+frame-hash goldens; `tests/unit/test_scale.c` checks the renderer scale against the frozen reference
+renderer and that sub-pixel quads encode to the same CCB fields as whole-pixel ones.
+
+**Cost.** `make test-performance SCALE=n` on one 2-core x86-64 machine (headless, median fps; the
+original code measured 711 TOTAL on the same machine, so scale 1 is unchanged):
+
+| Scenario | 1x | 2x | 4x |
+|---|---|---|---|
+| crash-and-game-over | 1,132 | 509 | 189 |
+| mission-chemical | 831 | 369 | 125 |
+| mission-death | 722 | 340 | 117 |
+| mission-earth2 | 557 | 265 | 100 |
+| mission-hard-ice | 510 | 264 | 101 |
+| mission-ice | 512 | 271 | 103 |
+| mission-plastic | 596 | 265 | 91 |
+| mission-space | 3,260 | 1,766 | 741 |
+| mission-warrior | 829 | 351 | 121 |
+| new-game-takeoff | 655 | 270 | 97 |
+| weapons-and-views | 718 | 310 | 111 |
+| **TOTAL** | **712** | **329** | **119** |
+
+2x costs 2.2x the time and 4x 6x: the per-texel work stays the same (the scene has as many texels)
+while the per-pixel work (filling, pixel processor, clears, fades, colour conversion) grows with n^2.
+The game itself paces flight at 20 frames per second (15 in space), so even the slowest mission at 4x
+(91 fps) has about 4.5x headroom on this machine; a single-core machine of the SSE4.1 minimum's era
+may want 2x or 3x.

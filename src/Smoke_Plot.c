@@ -72,7 +72,7 @@ plot_smoke(void *smokep)
   if (iabs(z) > y) {
     return;
   }
-  scale = pex_table[(y & ~63) >> 6];
+  scale = pex_fix(y, pex_table[(y & ~63) >> 6]);
   r7 = scale >> 1;
   colour = s->colour;
   shade = c;
@@ -145,8 +145,8 @@ plot_smoke(void *smokep)
   }
   x -= r6;
   z -= r6;
-  sx = MULS(x, scale) >> 16;
-  sy = MULS(z, scale) >> 16;
+  sx = MULS(x, scale) >> (16 - cel_subpix); /* sub-pixel above scale 1 */
+  sy = MULS(z, scale) >> (16 - cel_subpix);
   cel_quad.x_pos0 = sx;
   cel_quad.y_pos0 = sy;
   cel_quad.shade = shade;

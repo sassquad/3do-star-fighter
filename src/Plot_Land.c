@@ -247,7 +247,8 @@ fast_rotation(void *rotdata, int32_t res)
   }
 
   /* perspective: nodes in front of the camera are scaled; others keep
-   * camera-space x,z */
+   * camera-space x,z.  At scales above 1 the screen coordinates keep
+   * cel_subpix fractional bits (sf_compat.h); the products are unchanged. */
   {
     const int32_t *src = &rotated_coords[0][0] + node_offs[res] * 3;
     int32_t *dst = &screen_coords[0][0] + node_offs[res] * 2;
@@ -260,9 +261,12 @@ fast_rotation(void *rotdata, int32_t res)
         if (idx > 16383) {
           idx = 16383;
         }
-        s = pex_table[idx];
-        x = MULS(x, s) >> 16;
-        z = MULS(z, s) >> 16;
+        s = pex_fix(d, pex_table[idx]);
+        x = MULS(x, s) >> (16 - cel_subpix);
+        z = MULS(z, s) >> (16 - cel_subpix);
+      } else {
+        x = SUBPIX(x);
+        z = SUBPIX(z);
       }
       dst[0] = x;
       dst[1] = z;
@@ -294,16 +298,17 @@ update_waves(int32_t x, int32_t y)
 static int
 off_screen(const int32_t *v) /* v = x0,y0,x1,y1,x2,y2,x3,y3 */
 {
-  if (v[1] > 120 && v[3] > 120 && v[5] > 120 && v[7] > 120) {
+  const int32_t xl = SUBPIX(160), yl = SUBPIX(120);
+  if (v[1] > yl && v[3] > yl && v[5] > yl && v[7] > yl) {
     return 1;
   }
-  if (v[1] < -120 && v[3] < -120 && v[5] < -120 && v[7] < -120) {
+  if (v[1] < -yl && v[3] < -yl && v[5] < -yl && v[7] < -yl) {
     return 1;
   }
-  if (v[0] < -160 && v[2] < -160 && v[4] < -160 && v[6] < -160) {
+  if (v[0] < -xl && v[2] < -xl && v[4] < -xl && v[6] < -xl) {
     return 1;
   }
-  if (v[0] > 160 && v[2] > 160 && v[4] > 160 && v[6] > 160) {
+  if (v[0] > xl && v[2] > xl && v[4] > xl && v[6] > xl) {
     return 1;
   }
   return 0;
@@ -323,15 +328,32 @@ set_quad(const int32_t *v)
 }
 
 /* signed areas of the two triangles of the quad */
+/* Facing tests (only the sign is used).  With sub-pixel coordinates the
+   products would overflow 32 bits (and flip the sign, dropping or showing
+   the wrong land triangles), so they are formed in 64 bits; at scale 1 the
+   original 32-bit arithmetic, wrap-around included, is kept. */
+static int32_t
+cross64(int32_t a, int32_t b, int32_t c, int32_t d)
+{
+  int64_t r = (int64_t) a * b - (int64_t) c * d;
+  return (r > 0) - (r < 0);
+}
+
 static int32_t
 cross1(const int32_t *v)
 {
+  if (cel_subpix) {
+    return cross64(v[2] - v[0], v[5] - v[3], v[4] - v[2], v[3] - v[1]);
+  }
   return MULS(v[2] - v[0], v[5] - v[3]) - MULS(v[4] - v[2], v[3] - v[1]);
 }
 
 static int32_t
 cross2(const int32_t *v)
 {
+  if (cel_subpix) {
+    return cross64(v[6] - v[4], v[1] - v[7], v[0] - v[6], v[7] - v[5]);
+  }
   return MULS(v[6] - v[4], v[1] - v[7]) - MULS(v[0] - v[6], v[7] - v[5]);
 }
 

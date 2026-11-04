@@ -116,8 +116,23 @@ typedef struct CCB {
 /* ------------------------------------------------------------------ */
 /* Screens (see sf_videosys.h for the screen and frame-pacing API)        */
 /* ------------------------------------------------------------------ */
+/* SF_SCREEN_W/H are the game's logical screen: every position the game
+   computes is in this 320x240 space.  The frame buffers themselves are
+   sf_fb_w x sf_fb_h = sf_scale times larger (sf_videosys.c); the cel engine
+   scales what it draws by sf_scale.  At sf_scale 1 they are the same. */
 #define SF_SCREEN_W 320
 #define SF_SCREEN_H 240
+#define SF_MAX_SCALE 4
+extern int sf_scale, sf_fb_w, sf_fb_h;
+/* Sub-pixel precision of the 3D view.  While draw_frame() draws the world at
+   a scale above 1, the projection keeps CEL_SUBPIX_BITS fractional bits: the
+   screen coordinates the 3D code computes and hands to the arm_add* cel
+   builders are in 1/8 logical pixels (SUBPIX(1) = one logical pixel).  At
+   scale 1, and for all 2D drawing (HUD, menus, map, text), cel_subpix is 0
+   and the original whole-pixel maths is unchanged. */
+#define CEL_SUBPIX_BITS 3
+extern int cel_subpix;
+#define SUBPIX(v) ((v) * (1 << cel_subpix))
 
 /* pen position and colours for DrawTextString */
 typedef struct GrafCon {

@@ -64,7 +64,16 @@ machine_code_constants(void *memptr)
 static int32_t
 perspective(int32_t depth)
 {
-  return pex_table[(depth & ~63) >> 6];
+  return pex_fix(depth, pex_table[(depth & ~63) >> 6]);
+}
+
+/* Camera-space coordinate times a perspective factor -> screen coordinate.
+   The product is the original one (so it wraps exactly where the ARM code
+   did); at scales above 1 the result keeps cel_subpix fractional bits. */
+static inline int32_t
+project(int32_t v, int32_t sc)
+{
+  return MULS(v, sc) >> (16 - cel_subpix);
 }
 
 /* Transform a world position (relative to the camera) into camera space */
@@ -161,16 +170,16 @@ plot_this_planet(int32_t *planet)
     return;
   }
   sc = perspective(y);
-  sx = MULS(x, sc) >> 16;
-  sy = MULS(z, sc) >> 16;
-  if (sx > 160 + PLANET_SIZE / 2 || sx < -(160 + PLANET_SIZE / 2)) {
+  sx = project(x, sc);
+  sy = project(z, sc);
+  if (sx > SUBPIX(160 + PLANET_SIZE / 2) || sx < -SUBPIX(160 + PLANET_SIZE / 2)) {
     return;
   }
-  if (sy > 120 + PLANET_SIZE / 2 || sy < -(120 + PLANET_SIZE / 2)) {
+  if (sy > SUBPIX(120 + PLANET_SIZE / 2) || sy < -SUBPIX(120 + PLANET_SIZE / 2)) {
     return;
   }
-  cel_quad.x_pos0 = sx - PLANET_SIZE / 2;
-  cel_quad.y_pos0 = sy - PLANET_SIZE / 2;
+  cel_quad.x_pos0 = sx - SUBPIX(PLANET_SIZE / 2);
+  cel_quad.y_pos0 = sy - SUBPIX(PLANET_SIZE / 2);
   cel_quad.shade = 12;
   arm_addgamecel(&cel_quad, planet[3], 1024, 1024);
 }
@@ -195,13 +204,14 @@ plot_this_distant_ship(ship_stack *ship)
     return;
   }
   sc = perspective(y);
-  sx = MULS(x, sc) >> 16;
-  sy = MULS(z, sc) >> 16;
-  if (sx > 168 || sx < -168 || sy > 128 || sy < -128) {
+  sx = project(x, sc);
+  sy = project(z, sc);
+  if (sx > SUBPIX(168) || sx < -SUBPIX(168) || sy > SUBPIX(128) ||
+      sy < -SUBPIX(128)) {
     return;
   }
-  cel_quad.x_pos0 = sx - 4;
-  cel_quad.y_pos0 = sy - 4;
+  cel_quad.x_pos0 = sx - SUBPIX(4);
+  cel_quad.y_pos0 = sy - SUBPIX(4);
   cel_quad.shade = 12;
   t = ship->type >> 4;
   if (t == WEAPON) {
@@ -249,9 +259,10 @@ plot_stars(void)
     if (y < 1024) {
       continue;
     }
-    sx = MULS(x, perspective(y)) >> 16;
-    sy = MULS(z, perspective(y)) >> 16;
-    if (sx > 180 || sx < -180 || sy > 140 || sy < -140) {
+    sx = project(x, perspective(y));
+    sy = project(z, perspective(y));
+    if (sx > SUBPIX(180) || sx < -SUBPIX(180) || sy > SUBPIX(140) ||
+        sy < -SUBPIX(140)) {
       continue;
     }
     plot[n].x = sx;
@@ -279,9 +290,10 @@ plot_space_stars(void)
     if (y < 1024) {
       continue;
     }
-    sx = MULS(x, perspective(y)) >> 16;
-    sy = MULS(z, perspective(y)) >> 16;
-    if (sx > 180 || sx < -180 || sy > 140 || sy < -140) {
+    sx = project(x, perspective(y));
+    sy = project(z, perspective(y));
+    if (sx > SUBPIX(180) || sx < -SUBPIX(180) || sy > SUBPIX(140) ||
+        sy < -SUBPIX(140)) {
       continue;
     }
     plot[n].x = sx;
@@ -418,8 +430,12 @@ do_perspective(int32_t count_minus1, int high)
         }
         sc = pex_table[idx];
       }
-      x = MULS(x, sc) >> 16;
-      z = MULS(z, sc) >> 16;
+      sc = pex_fix(d, sc);
+      x = project(x, sc);
+      z = project(z, sc);
+    } else { /* behind the camera: camera-space x, z stand in, as before */
+      x = SUBPIX(x);
+      z = SUBPIX(z);
     }
     graphic_screen_coords[i][0] = x;
     graphic_screen_coords[i][1] = z;
@@ -496,9 +512,17 @@ rotate_graphic(const int32_t *m, const int32_t *pos)
 /* ------------------------------------------------------------------ */
 /* Polygon link walker                                                 */
 /* ------------------------------------------------------------------ */
+/* Facing test on screen coordinates; only the sign is used.  With
+   sub-pixel coordinates the products grow by 4^cel_subpix, so they are
+   formed in 64 bits; at scale 1 the original 32-bit arithmetic is kept. */
 static int32_t
 cross3(const int32_t *s0, const int32_t *s1, const int32_t *s2)
 {
+  if (cel_subpix) {
+    int64_t c = (int64_t) (s1[0] - s0[0]) * (s2[1] - s1[1]) -
+                (int64_t) (s2[0] - s1[0]) * (s1[1] - s0[1]);
+    return (c > 0) - (c < 0);
+  }
   return MULS(s1[0] - s0[0], s2[1] - s1[1]) -
          MULS(s2[0] - s1[0], s1[1] - s0[1]);
 }
@@ -515,16 +539,17 @@ add_poly(const int32_t *v /* x0,y0,..x3,y3 */, uint32_t rec4)
   int32_t sprite = (int32_t) (rec4 >> 24), r17 = (int32_t) ((rec4 >> 16) & 255),
           r18 = (int32_t) ((rec4 >> 8) & 255);
   int32_t shade;
-  if (v[1] > 120 && v[3] > 120 && v[5] > 120 && v[7] > 120) {
+  const int32_t xl = SUBPIX(160), yl = SUBPIX(120);
+  if (v[1] > yl && v[3] > yl && v[5] > yl && v[7] > yl) {
     return;
   }
-  if (v[1] < -120 && v[3] < -120 && v[5] < -120 && v[7] < -120) {
+  if (v[1] < -yl && v[3] < -yl && v[5] < -yl && v[7] < -yl) {
     return;
   }
-  if (v[0] < -160 && v[2] < -160 && v[4] < -160 && v[6] < -160) {
+  if (v[0] < -xl && v[2] < -xl && v[4] < -xl && v[6] < -xl) {
     return;
   }
-  if (v[0] > 160 && v[2] > 160 && v[4] > 160 && v[6] > 160) {
+  if (v[0] > xl && v[2] > xl && v[4] > xl && v[6] > xl) {
     return;
   }
   cel_quad.x_pos0 = v[0];
@@ -574,7 +599,7 @@ plot_fluffy(const uint32_t *rec, int32_t type)
   if (y < 8192) {
     return;
   }
-  sc = pex_table[(y & ~63) >> 6];
+  sc = pex_fix(y, pex_table[(y & ~63) >> 6]);
   sz = sc + (sc >> 1);
   if (type >= 252) {
     off = 3 * 512;
@@ -585,8 +610,8 @@ plot_fluffy(const uint32_t *rec, int32_t type)
   }
   x -= off;
   z -= off;
-  cel_quad.x_pos0 = MULS(x, sc) >> 16;
-  cel_quad.y_pos0 = MULS(z, sc) >> 16;
+  cel_quad.x_pos0 = project(x, sc);
+  cel_quad.y_pos0 = project(z, sc);
   cel_quad.shade = (type < 252) ? 4 : 17;
   arm_addgamecel(&cel_quad, type - (248 - FLUFFY_CLOUD), sz, sz);
 }
@@ -622,9 +647,9 @@ clip_this_polygon(const uint32_t *rec, int32_t *v_out_ok, int32_t *screen_out)
     if (idx < 0) {
       idx = 0;
     }
-    sc = pex_table_near[idx];
-    s[i][0] = MULS(c[i][0], sc) >> 16;
-    s[i][1] = MULS(c[i][2], sc) >> 16;
+    sc = pex_fix(c[i][1], pex_table_near[idx]);
+    s[i][0] = project(c[i][0], sc);
+    s[i][1] = project(c[i][2], sc);
   }
   for (i = 0; i < 4; i++) {
     screen_out[i * 2] = s[i][0];
@@ -1129,24 +1154,26 @@ draw_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t colour,
           int32_t shader)
 {
   int32_t dx, dy, ox = 0, oy = 0;
-  if (y0 > 120 && y1 > 120) {
+  const int32_t xl = SUBPIX(160), yl = SUBPIX(120);
+  if (y0 > yl && y1 > yl) {
     return;
   }
-  if (y0 < -120 && y1 < -120) {
+  if (y0 < -yl && y1 < -yl) {
     return;
   }
-  if (x0 < -160 && x1 < -160) {
+  if (x0 < -xl && x1 < -xl) {
     return;
   }
-  if (x0 > 160 && x1 > 160) {
+  if (x0 > xl && x1 > xl) {
     return;
   }
   dx = iabs32(x0 - x1);
   dy = iabs32(y0 - y1);
+  /* one logical pixel thick at every scale */
   if (dx > dy) {
-    oy = 1;
+    oy = SUBPIX(1);
   } else {
-    ox = 1;
+    ox = SUBPIX(1);
   }
   cel_quad.x_pos0 = x0;
   cel_quad.y_pos0 = y0;

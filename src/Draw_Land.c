@@ -4,6 +4,7 @@
 #include "SF_Screenutils.h"
 #include "SF_Celutils.h"
 #include "Draw_Land.h"
+#include "Setup_Tables.h"
 #include "Plot_Graphic.h"
 #include "Smoke_Control.h"
 #include "Laser_Control.h"
@@ -21,6 +22,29 @@
 // Test stuff
 // #include "OperaMath.h"
 // #include "Math_Test.h"
+
+/* The sky and the black polygon under the horizon are laid out in whole
+   logical pixels around the horizon point (size_x, size_y), as they always
+   were.  In the sub-pixel 3D view (sf_compat.h) the finished quad is moved to
+   sub-pixel units, keeping the horizon point's fraction from the projection
+   so the sky follows the land smoothly. */
+static int32_t sky_frac_x, sky_frac_y;
+
+static void
+sky_quad_to_subpix(void)
+{
+  if (!cel_subpix) {
+    return;
+  }
+  cel_quad.x_pos0 = SUBPIX(cel_quad.x_pos0) + sky_frac_x;
+  cel_quad.y_pos0 = SUBPIX(cel_quad.y_pos0) + sky_frac_y;
+  cel_quad.x_pos1 = SUBPIX(cel_quad.x_pos1) + sky_frac_x;
+  cel_quad.y_pos1 = SUBPIX(cel_quad.y_pos1) + sky_frac_y;
+  cel_quad.x_pos2 = SUBPIX(cel_quad.x_pos2) + sky_frac_x;
+  cel_quad.y_pos2 = SUBPIX(cel_quad.y_pos2) + sky_frac_y;
+  cel_quad.x_pos3 = SUBPIX(cel_quad.x_pos3) + sky_frac_x;
+  cel_quad.y_pos3 = SUBPIX(cel_quad.y_pos3) + sky_frac_y;
+}
 
 void
 draw_land()
@@ -64,14 +88,14 @@ draw_land()
   if (test_mode == 1) {
     armzsort_add(size, players_ship, 0);
     setup_rotations();
-    cel_quad.x_pos0 = -160;
-    cel_quad.y_pos0 = -120;
-    cel_quad.x_pos1 = 160;
-    cel_quad.y_pos1 = -120;
-    cel_quad.x_pos2 = 160;
-    cel_quad.y_pos2 = 120;
-    cel_quad.x_pos3 = -160;
-    cel_quad.y_pos3 = 120;
+    cel_quad.x_pos0 = -SUBPIX(160);
+    cel_quad.y_pos0 = -SUBPIX(120);
+    cel_quad.x_pos1 = SUBPIX(160);
+    cel_quad.y_pos1 = -SUBPIX(120);
+    cel_quad.x_pos2 = SUBPIX(160);
+    cel_quad.y_pos2 = SUBPIX(120);
+    cel_quad.x_pos3 = -SUBPIX(160);
+    cel_quad.y_pos3 = SUBPIX(120);
     cel_quad.shade = 0;
     arm_addmonocel(&cel_quad, 0, 55, 0);
     machine_code_flat_land_plot();
@@ -467,8 +491,15 @@ draw_land()
       node_data.y_pos = 2048;
     }
 
-    size_x = (node_data.x_pos * pex_table[(node_data.y_pos) >> 6]) >> 16;
-    size_y = (node_data.z_pos * pex_table[(node_data.y_pos) >> 6]) >> 16;
+    {
+      int32_t pex = pex_fix(node_data.y_pos, pex_table[(node_data.y_pos) >> 6]);
+      int32_t sub_x = (node_data.x_pos * pex) >> (16 - cel_subpix);
+      int32_t sub_y = (node_data.z_pos * pex) >> (16 - cel_subpix);
+      size_x = sub_x >> cel_subpix; /* whole pixels, exactly as before */
+      size_y = sub_y >> cel_subpix;
+      sky_frac_x = sub_x - SUBPIX(size_x);
+      sky_frac_y = sub_y - SUBPIX(size_y);
+    }
 
     size = find_2d_distance(size_x, size_y);
 
@@ -480,6 +511,7 @@ draw_land()
       rotate_2d_node(&node_data);
       size_x = node_data.x_pos;
       size_y = node_data.y_pos;
+      sky_frac_x = sky_frac_y = 0;
     }
 
     size += 200;
@@ -515,6 +547,7 @@ draw_land()
 
     cel_quad.shade = 0;
 
+    sky_quad_to_subpix();
     arm_addmonocel(&cel_quad, 0, 55, 0);
   }
 
@@ -549,6 +582,7 @@ draw_land()
       cel_quad.y_pos3 = size_y + node_data.y_pos;
 
       if (height_scaler <= 0) {
+        sky_quad_to_subpix();
         arm_plotsky(&cel_quad);
       }
 
@@ -584,6 +618,7 @@ draw_land()
           cel_quad.x_pos3 = size_x + node_data.x_pos;
           cel_quad.y_pos3 = size_y + node_data.y_pos;
 
+          sky_quad_to_subpix();
           arm_plotsky(&cel_quad);
         }
       }

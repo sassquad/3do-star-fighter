@@ -24,6 +24,8 @@
 
 static int32_t arm_codedskipx;
 
+int cel_subpix; /* see sf_compat.h */
+
 static int32_t
 clampshade(int32_t s, int32_t max)
 {
@@ -34,6 +36,17 @@ static inline int32_t
 SH(int32_t v, int32_t n)
 {
   return (int32_t) LSL((uint32_t) v, (uint32_t) n);
+}
+
+/* SH for a screen coordinate (or difference) that may carry cel_subpix
+   fractional bits: the CCB field gets the same fixed-point value as SH gives
+   for whole pixels, so its magnitude does not depend on the scale.  Shifts
+   smaller than cel_subpix drop the fraction the field cannot hold. */
+static inline int32_t
+SHP(int32_t v, int32_t n)
+{
+  n -= cel_subpix;
+  return n >= 0 ? SH(v, n) : ASR(v, (uint32_t) -n);
 }
 
 /* Take the next CCB from the plot list, flushing the list first if it is full
@@ -57,14 +70,14 @@ set_quad(CCB *c, const cel_celdata *q, int hs, int vs, int dds)
 {
   int32_t x0 = q->x_pos0, y0 = q->y_pos0, x1 = q->x_pos1, y1 = q->y_pos1;
   int32_t x2 = q->x_pos2, y2 = q->y_pos2, x3 = q->x_pos3, y3 = q->y_pos3;
-  c->ccb_XPos = (160 << 16) + SH(x0, 16);
-  c->ccb_YPos = (120 << 16) + SH(y0, 16);
-  c->ccb_HDX = SH(x1 - x0, hs);
-  c->ccb_HDY = SH(y1 - y0, hs);
-  c->ccb_VDX = SH(x3 - x0, vs);
-  c->ccb_VDY = SH(y3 - y0, vs);
-  c->ccb_HDDX = SH(x2 - x3 - x1 + x0, dds);
-  c->ccb_HDDY = SH(y2 - y3 - y1 + y0, dds);
+  c->ccb_XPos = (160 << 16) + SHP(x0, 16);
+  c->ccb_YPos = (120 << 16) + SHP(y0, 16);
+  c->ccb_HDX = SHP(x1 - x0, hs);
+  c->ccb_HDY = SHP(y1 - y0, hs);
+  c->ccb_VDX = SHP(x3 - x0, vs);
+  c->ccb_VDY = SHP(y3 - y0, vs);
+  c->ccb_HDDX = SHP(x2 - x3 - x1 + x0, dds);
+  c->ccb_HDDY = SHP(y2 - y3 - y1 + y0, dds);
 }
 
 #define WORDS(p) ((const uint32_t *) (p))
@@ -154,8 +167,8 @@ arm_addgamecel(void *celquad, int32_t sprite, int32_t xscale, int32_t yscale)
     c->ccb_SourcePtr = (CelData *) (cel + 16); /* 64 byte palette first */
     c->ccb_PLUTPtr = (void *) cel;
   }
-  c->ccb_XPos = SH(cq->x_pos0 + 160, 16);
-  c->ccb_YPos = SH(cq->y_pos0 + 120, 16);
+  c->ccb_XPos = SHP(cq->x_pos0 + SUBPIX(160), 16);
+  c->ccb_YPos = SHP(cq->y_pos0 + SUBPIX(120), 16);
   c->ccb_HDX = SH(xscale, 10);
   c->ccb_HDY = 0;
   c->ccb_VDX = 0;

@@ -4,13 +4,15 @@
  * buttons are ORed with the real input.  With SDL_VIDEODRIVER=dummy and
  * SDL_AUDIODRIVER=dummy the game runs without a display or sound card. Timing
  * is real, so unlike the headless build runs are not frame-exact.
- * The keyboard layout is read from config.txt in the current directory (see
- * sf_keyconfig.h); if it is missing, one with the defaults is written.  If it
- * has invalid keys or a key used for two controls, the game lists the
- * problems and exits. */
+ * The keyboard layout and the display SCALE are read from config.txt in the
+ * current directory (see sf_keyconfig.h); if it is missing, one with the
+ * defaults is written.  If it has invalid keys, a key used for two controls
+ * or a bad setting, the game lists the problems and exits.  SF_SCALE, if
+ * set, overrides SCALE. */
 #include "sf_platform.h"
 #include "sf_testhooks.h"
 #include "sf_keyconfig.h"
+#include "sf_videosys.h"
 /* We keep our own main() (Star3000.c); on Windows tell SDL not to rename it to
  * SDL_main. */
 #define SDL_MAIN_HANDLED
@@ -23,7 +25,7 @@ static SDL_AudioDeviceID adev;
 static plat_audio_cb acb;
 static SDL_GameController *pad_dev;
 static int quit;
-static uint32_t argb[320 * 240];
+static uint32_t *argb; /* sf_fb_w x sf_fb_h */
 static void load_keys(void);
 
 int
@@ -42,11 +44,34 @@ plat_init(void)
     fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
     return 0;
   }
-  load_keys();
-  win =
-      SDL_CreateWindow("Star Fighter", SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, 960, 720, SDL_WINDOW_RESIZABLE);
+  load_keys(); /* also chooses the scale (SCALE in config.txt) */
+  if (th_scale()) {
+    video_set_scale(th_scale());
+  }
+  {
+    /* 960x720 as before, or the frame-buffer size if larger, but no larger
+       than the desktop's usable area (keeping 4:3) */
+    int w = sf_fb_w > 960 ? sf_fb_w : 960, h = sf_fb_h > 720 ? sf_fb_h : 720;
+    SDL_Rect r;
+    if (SDL_GetDisplayUsableBounds(0, &r) == 0 && r.w > 0 && r.h > 0 &&
+        (w > r.w || h > r.h)) {
+      if (r.w * 3 < r.h * 4) {
+        w = r.w;
+        h = r.w * 3 / 4;
+      } else {
+        h = r.h;
+        w = r.h * 4 / 3;
+      }
+    }
+    win = SDL_CreateWindow("Star Fighter", SDL_WINDOWPOS_CENTERED,
+                           SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_RESIZABLE);
+  }
   if (!win) {
+    return 0;
+  }
+  fprintf(stderr, "display: scale %d (%dx%d)\n", sf_scale, sf_fb_w, sf_fb_h);
+  argb = (uint32_t *) malloc((size_t) sf_fb_w * sf_fb_h * 4);
+  if (!argb) {
     return 0;
   }
   ren = SDL_CreateRenderer(
@@ -57,10 +82,10 @@ plat_init(void)
   if (!ren) {
     return 0;
   }
-  SDL_RenderSetLogicalSize(ren, 320, 240);
+  SDL_RenderSetLogicalSize(ren, sf_fb_w, sf_fb_h);
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
   tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888,
-                          SDL_TEXTUREACCESS_STREAMING, 320, 240);
+                          SDL_TEXTUREACCESS_STREAMING, sf_fb_w, sf_fb_h);
   return tex != NULL;
 }
 
@@ -88,7 +113,7 @@ plat_present(const uint16_t *fb, int br)
 {
   int i;
   th_frame(fb, br, SDL_GetTicks());
-  for (i = 0; i < 320 * 240; i++) {
+  for (i = 0; i < sf_fb_w * sf_fb_h; i++) {
     uint32_t v = fb[i], r = ((v >> 10) & 31) << 3, g = ((v >> 5) & 31) << 3,
              b = (v & 31) << 3;
     r |= r >> 5;
@@ -99,7 +124,7 @@ plat_present(const uint16_t *fb, int br)
     b = b * br >> 8;
     argb[i] = 0xff000000u | (r << 16) | (g << 8) | b;
   }
-  SDL_UpdateTexture(tex, NULL, argb, 320 * 4);
+  SDL_UpdateTexture(tex, NULL, argb, sf_fb_w * 4);
   SDL_RenderClear(ren);
   SDL_RenderCopy(ren, tex, NULL, NULL);
   SDL_RenderPresent(ren);
@@ -217,6 +242,7 @@ load_keys(void)
     f = fopen(KEYS_FILE, "w");
     if (f) {
       sf_keyconfig_write(f, keys, nkeys, key_name);
+      sf_config_write_settings(f, sf_scale);
       fclose(f);
       fprintf(stderr, "keys: wrote the default layout to %s\n", KEYS_FILE);
     } else {
@@ -232,9 +258,14 @@ load_keys(void)
   if (!text || size < 0 || fread(text, 1, (size_t) size, f) != (size_t) size) {
     key_problem(KEYS_FILE ": cannot be read");
   } else {
+    int scale;
     text[size] = 0;
     nkeys = sf_keyconfig_parse(text, keys, nkeys, key_lookup, key_warning);
     sf_keyconfig_check(keys, nkeys, key_clash);
+    scale = sf_config_scale(text, key_warning);
+    if (scale) {
+      video_set_scale(scale);
+    }
   }
   free(text);
   fclose(f);

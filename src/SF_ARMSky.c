@@ -72,14 +72,18 @@ arm_plotsky(void *celquad)
   c = cq->plotlist[cq->temp_cels++];
   c->ccb_Flags = 0x3f6e4120u;
   c->ccb_SourcePtr = (CelData *) armsky_renderdata;
-  c->ccb_XPos = (160 << 16) + (int32_t) LSL((uint32_t) x0, 16);
-  c->ccb_YPos = (120 << 16) + (int32_t) LSL((uint32_t) y0, 16);
-  c->ccb_HDX = (int32_t) LSL((uint32_t) (x1 - x0), 20);
-  c->ccb_HDY = (int32_t) LSL((uint32_t) (y1 - y0), 20);
-  c->ccb_VDX = divide((int32_t) LSL((uint32_t) (x3 - x0), 16), h);
-  c->ccb_VDY = divide((int32_t) LSL((uint32_t) (y3 - y0), 16), h);
-  c->ccb_HDDX = divide((int32_t) LSL((uint32_t) (x2 - x3 - x1 + x0), 20), h);
-  c->ccb_HDDY = divide((int32_t) LSL((uint32_t) (y2 - y3 - y1 + y0), 20), h);
+  /* coordinates carry cel_subpix fractional bits in the 3D view (sf_compat.h):
+     shift by that much less, so the fields get the same fixed-point values */
+  c->ccb_XPos = (160 << 16) + (int32_t) LSL((uint32_t) x0, 16 - cel_subpix);
+  c->ccb_YPos = (120 << 16) + (int32_t) LSL((uint32_t) y0, 16 - cel_subpix);
+  c->ccb_HDX = (int32_t) LSL((uint32_t) (x1 - x0), 20 - cel_subpix);
+  c->ccb_HDY = (int32_t) LSL((uint32_t) (y1 - y0), 20 - cel_subpix);
+  c->ccb_VDX = divide((int32_t) LSL((uint32_t) (x3 - x0), 16 - cel_subpix), h);
+  c->ccb_VDY = divide((int32_t) LSL((uint32_t) (y3 - y0), 16 - cel_subpix), h);
+  c->ccb_HDDX =
+      divide((int32_t) LSL((uint32_t) (x2 - x3 - x1 + x0), 20 - cel_subpix), h);
+  c->ccb_HDDY =
+      divide((int32_t) LSL((uint32_t) (y2 - y3 - y1 + y0), 20 - cel_subpix), h);
   c->ccb_PIXC = 0x1f001f00u;
   c->ccb_PRE0 = ((uint32_t) (h - 1) << 6) | (1 << 4) | 6;
   c->ccb_PRE1 = 1u << 12;

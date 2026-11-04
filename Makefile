@@ -13,7 +13,8 @@
 #   make celbench [REPEAT=n]   replay them: same framebuffers as recorded? and time the cel engine
 #   make restamp [SCENARIOS="a b"]   after a lossless SF_Resources conversion: record the new resources in the
 #                        goldens, but only for scenarios whose frames and audio are still identical
-#   make test-performance [REPEAT=n] [ONLY=text]   frames per second of the game engine (scenarios marked performance: yes)
+#   make test-performance [REPEAT=n] [ONLY=text] [SCALE=n]   frames per second of the game engine (scenarios
+#                              marked performance: yes), optionally at internal resolution scale n
 #   RES=/path/to/SF_Resources selects the resources (default: $$SF_RESOURCES, else ./SF_Resources)
 #
 # Build variables: OBJDIR=dir BINDIR=dir (where objects / binaries go), SAN=address,undefined (sanitizers),
@@ -183,7 +184,7 @@ celtrace:
 celbench:
 	$(RUNTEST) celbench $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY))
 test-performance:
-	$(RUNTEST) performance $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY))
+	$(RUNTEST) performance $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY)) $(if $(SCALE),--scale $(SCALE))
 
 clean:
 	rm -rf $(OBJDIR) build starfighter starfighter-headless starfighter.exe starfighter-headless.exe

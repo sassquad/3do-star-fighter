@@ -201,6 +201,54 @@ TEST(test_written_file_reads_back)
   free(text);
 }
 
+/* ---- settings: SCALE ---- */
+TEST(test_scale_setting)
+{
+  int n;
+  nwarn = 0;
+  CHECK_EQ(sf_config_scale("", warn), 0); /* not set */
+  CHECK_EQ(sf_config_scale("# SCALE = 3\nA = Z\n", warn), 0);
+  CHECK_EQ(sf_config_scale("SCALE = 2\n", warn), 2);
+  CHECK_EQ(sf_config_scale("  scale=4  \r\n", warn), 4);
+  CHECK_EQ(sf_config_scale("SCALE = 1\nSCALE = 3\n", warn), 3); /* the last one counts */
+  CHECK_EQ(nwarn, 0);
+  CHECK_EQ(sf_config_scale("SCALE = 0\nSCALE = 5\nSCALE = two\nSCALE =\nSCALE = 2x\n", warn), 0);
+  CHECK_EQ(nwarn, 5);
+  CHECK_EQ(warn_lines[0], 1);
+  CHECK_EQ(warn_lines[4], 5);
+  nwarn = 0;
+  CHECK_EQ(sf_config_scale("SCALE = 9\nSCALE = 2\n", warn), 2); /* bad line ignored */
+  CHECK_EQ(nwarn, 1);
+  /* the key parser leaves the setting alone: no "unknown control" */
+  n = load("SCALE = 2\nSTART = Return\n");
+  CHECK_EQ(nwarn, 0);
+  CHECK_EQ(n, NDEF - 1);
+}
+
+TEST(test_scale_written_and_read_back)
+{
+  const char *dir = sft_tempdir("keys2");
+  char path[600], text[8192];
+  FILE *f;
+  size_t len;
+  REQUIRE(dir);
+  snprintf(path, sizeof path, "%s/config.txt", dir);
+  f = fopen(path, "w");
+  REQUIRE(f);
+  sf_keyconfig_write(f, defaults, NDEF, keyname);
+  sf_config_write_settings(f, 3);
+  fclose(f);
+  f = fopen(path, "rb");
+  REQUIRE(f);
+  len = fread(text, 1, sizeof text - 1, f);
+  fclose(f);
+  text[len] = 0;
+  nwarn = 0;
+  CHECK_EQ(sf_config_scale(text, warn), 3);
+  CHECK_EQ(load(text), NDEF);
+  CHECK_EQ(nwarn, 0);
+}
+
 /* ---- keys used for more than one control ---- */
 static const sf_keybind *clash_a[8], *clash_b[8];
 static int nclash;
@@ -285,6 +333,8 @@ main(void)
   RUN(test_mistakes_are_reported_and_skipped);
   RUN(test_binding_limit);
   RUN(test_written_file_reads_back);
+  RUN(test_scale_setting);
+  RUN(test_scale_written_and_read_back);
   RUN(test_defaults_have_no_clash);
   RUN(test_clash_with_builtin_key);
   RUN(test_clash_between_lines);

@@ -28,8 +28,9 @@ The exit status is non-zero if anything failed.
 | `build` | headless and SDL builds with `-Werror`; a clang build whose warnings are compared with `tests/clang-warnings.txt` (fails on new ones); the ASan/UBSan build; the Windows build (below) |
 | `unit/...` | C unit tests in `tests/unit/` (below), each case reported separately |
 | `scenario/...` | scripted runs of the headless game (below): runs to the end, no sanitizer report, behavioural expectations, frames and audio identical to the goldens |
+| `scaled/...` | scenarios run again at a higher internal resolution (`SF_SCALE`, below): same game play, 2D screens are the scale-1 screens blown up, frames identical to their own goldens |
 | `determinism` | two scenarios re-run twice more with address randomisation on: frames, state log and audio must be identical (this is how the uninitialised explosion smoke was found) |
-| `sdl` | the real SDL build with `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy` (run in its own folder): boots, takes scripted input, starts a mission; writes the default `config.txt`, loads a valid edited one, and refuses (exit 1, every problem listed) one with invalid or shared keys |
+| `sdl` | the real SDL build with `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy` (run in its own folder): boots, takes scripted input, starts a mission; writes the default `config.txt`, loads a valid edited one, and refuses (exit 1, every problem listed) one with invalid or shared keys or a bad `SCALE`; `SCALE = 2` renders at 640x480 and `SF_SCALE` overrides it |
 
 ## Unit tests (`tests/unit/test_*.c`)
 
@@ -136,6 +137,24 @@ it re-runs every scenario and records the new resources in `meta.txt` only where
 are still identical. Never rebless for a conversion. A failure after a compiler upgrade with nothing else changed is reported with both
 compiler names; check the images and rebless.
 
+### Scaled runs (`scaled/headless-x2`, `-x4`, `asan-x4`)
+
+The game can render at 320x240 times n (`SCALE` in `config.txt`, `SF_SCALE=n`). `make test` runs
+`boot-to-menu`, `new-game-takeoff` and `weapons-and-views` again at scale 2; `make test-full` runs every
+scenario at scale 2, four at scale 4, and two at scale 4 under ASan (`SCALED` and `ASAN_SCALED` in
+`run.py`). Each scaled run must
+
+* play exactly as at scale 1: state log and audio identical (the resolution must never reach game
+  logic);
+* draw the 2D screens before the first in-flight frame (videos, menus, briefing) as the scale-1
+  screens blown up: exactly, for every frame made of whole logical pixels (the third column of
+  `SF_HASH` is the hash at one pixel per n x n block); the checkpoint images may differ from the
+  blown-up scale-1 images in at most 0.5 % of pixels, because quads with diagonal edges (menu box
+  bevels, zooming boxes) are drawn finer;
+* match its own golden, `tests/golden/<scenario>/scale<n>/frames.txt` (hashes only; the scale-1
+  checkpoint images show the same scenes). `make rebless` records these along with the scale-1
+  goldens.
+
 ## Fixtures
 
 `tests/fixtures/base.save` is a save game written by the game itself (`save-and-load`). Scenarios
@@ -153,12 +172,13 @@ format is the game's in-memory `gamefile` struct: if it changes (`GAMEFILE_VERSI
 | `SF_SCRIPT=file` | scripted buttons (ORed with the real input in the SDL build); unknown buttons or bad lines are fatal |
 | `SF_MAXFRAMES=n` | exit 0 after n presented frames |
 | `SF_DUMP=dir`, `SF_DUMP_EVERY=n` | write frames as PPM |
-| `SF_HASH=file` | one hash per frame |
+| `SF_HASH=file` | one hash per frame (above scale 1, a second hash at one pixel per n x n block, or `-`) |
 | `SF_STATE=file` | game state per frame (columns above) |
 | `SF_AUDIO_DUMP=file` | the mixed audio as a 44.1 kHz stereo WAV (the headless build mixes in step with its virtual clock) |
 | `SF_RECORD=file` | record the real input as an `SF_SCRIPT` file |
 | `SF_WATCHDOG=sec` | print a backtrace and exit 3 if the game hangs |
 | `SF_TRACE_PAD=1` | log scripted buttons |
+| `SF_SCALE=n` | render at 320x240 times n (1-4); overrides `SCALE` in `config.txt` |
 | `SF_CELTRACE=file`, `SF_CELTRACE_FRAMES=a-b` | record every cel list drawn in frames a-b (see below) |
 
 The SDL build runs in real time, so its runs are not frame-exact; `make test` only checks that it
@@ -184,7 +204,8 @@ The headless build never sleeps (its clock is virtual), so this is how fast the 
 frames, not the game's 60 Hz pacing. Each figure covers the whole scenario, including the menus and
 briefing before the mission starts (roughly the first 800-1,100 frames); the rest is in flight.
 `REPEAT=n` sets the runs per scenario (default 3), `ONLY=text` picks scenarios
-(`make test-performance ONLY=mission REPEAT=5`). Results go to `build/test-report/performance.csv` and
+(`make test-performance ONLY=mission REPEAT=5`), `SCALE=n` renders at scale n (rows are named
+`scenario@xn`). Results go to `build/test-report/performance.csv` and
 are appended, with a timestamp and the compiler, to `build/performance-history.csv` for comparing
 over time. The command reports figures only; it fails only if a scenario does not run. Timings are
 noisy on shared or virtual machines (identical runs varied by up to 2x on one), so compare figures from

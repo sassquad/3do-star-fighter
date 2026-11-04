@@ -50,6 +50,11 @@ draw_frame(int32_t camera_number)
 
   int32_t docked_camera = 0;
 
+  // Above scale 1 the whole 3D view (land node projection in rotate_land,
+  // then draw_land) is projected with sub-pixel precision (see sf_compat.h);
+  // everything drawn after it (HUD, cockpit, menus) uses whole logical pixels.
+  cel_subpix = (sf_scale > 1) ? CEL_SUBPIX_BITS : 0;
+
   // camera[camera_number].counter2 = 0 ;
 
   if (((view_ship->type) >> 4) == PLAYERS_SHIP &&
@@ -457,4 +462,6 @@ draw_frame(int32_t camera_number)
 
   // Update the engine sounds for the 2 near by ships
   update_engine_sounds();
+
+  cel_subpix = 0;
 }

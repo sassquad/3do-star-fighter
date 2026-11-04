@@ -104,6 +104,57 @@ warn_(sf_keywarn warn, int line, const char *problem, const char *text)
   }
 }
 
+/* names of the settings lines (not controls) */
+static int
+is_setting(const char *name)
+{
+  return same_ci(name, "SCALE");
+}
+
+int
+sf_config_scale(const char *text, sf_keywarn warn)
+{
+  int lineno = 0, scale = 0;
+  const char *p = text;
+  while (p && *p) {
+    const char *end = strchr(p, '\n'), *eq;
+    size_t len = end ? (size_t) (end - p) : strlen(p);
+    char line[512], name[64], value[512];
+    lineno++;
+    trimmed(line, sizeof line, p, len);
+    p = end ? end + 1 : NULL;
+    if (!line[0] || line[0] == '#' || !(eq = strchr(line, '='))) {
+      continue; /* sf_keyconfig_parse reports malformed lines */
+    }
+    trimmed(name, sizeof name, line, (size_t) (eq - line));
+    trimmed(value, sizeof value, eq + 1, strlen(eq + 1));
+    if (same_ci(name, "SCALE")) {
+      char *e;
+      long n = strtol(value, &e, 10);
+      if (!value[0] || *e || n < 1 || n > SF_MAX_SCALE) {
+        warn_(warn, lineno, "SCALE must be a whole number from 1 to 4", value);
+      } else {
+        scale = (int) n;
+      }
+    }
+  }
+  return scale;
+}
+
+void
+sf_config_write_settings(FILE *f, int scale)
+{
+  fprintf(f,
+          "# Display scale: the game is drawn at 320x240 times this number "
+          "(1 to 4;\n"
+          "# 2 = 640x480).  The 3D view gets sharper; the HUD, menus, text "
+          "and videos\n"
+          "# keep their size and look.  Higher scales need a faster "
+          "computer.\n"
+          "SCALE = %d\n",
+          scale);
+}
+
 int
 sf_keyconfig_parse(const char *text, sf_keybind *binds, int n,
                    sf_keylookup lookup, sf_keywarn warn)
@@ -130,6 +181,9 @@ sf_keyconfig_parse(const char *text, sf_keybind *binds, int n,
     }
     trimmed(name, sizeof name, line, (size_t) (eq - line));
     trimmed(value, sizeof value, eq + 1, strlen(eq + 1));
+    if (is_setting(name)) {
+      continue; /* read by sf_config_scale etc. */
+    }
     mask = sf_keyconfig_mask_for(name);
     if (!mask) {
       warn_(warn, lineno,
@@ -190,8 +244,8 @@ sf_keyconfig_write(FILE *f, const sf_keybind *binds, int n,
 {
   int c, i;
   fprintf(f,
-          "# Star Fighter keyboard controls, read from this file when the game "
-          "starts.\n"
+          "# Star Fighter keyboard controls and settings, read from this file "
+          "when the\n# game starts.\n"
           "#\n"
           "#   CONTROL = key, key ...\n"
           "#\n"

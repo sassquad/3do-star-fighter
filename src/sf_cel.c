@@ -56,6 +56,14 @@ typedef struct {
 
 #define MAXW 1024
 #define MAXH 1024
+/* longest row the rasteriser holds: a cel row, or a frame-buffer row at the
+   largest scale */
+#define MAXROW (SF_SCREEN_W * SF_MAX_SCALE > MAXW ? SF_SCREEN_W * SF_MAX_SCALE : MAXW)
+
+/* Frame buffer size for the list being drawn (sf_fb_w x sf_fb_h).  Kept in
+   file statics whose address is never taken, so the compiler knows the pixel
+   stores cannot change them. */
+static int g_w = SF_SCREEN_W, g_h = SF_SCREEN_H;
 
 static inline uint32_t
 get_bits(const uint32_t *row, uint32_t bitpos, int n)
@@ -273,13 +281,13 @@ static inline void
 put_px(uint16_t *fb, int x, int y, uint32_t pix, const PixLUT *luts, int bgnd)
 {
   uint16_t *d;
-  if ((unsigned) x >= SF_SCREEN_W || (unsigned) y >= SF_SCREEN_H) {
+  if ((unsigned) x >= (unsigned) g_w || (unsigned) y >= (unsigned) g_h) {
     return;
   }
   if (((pix >> 16) & 1) && !bgnd) {
     return; /* transparent */
   }
-  d = &fb[y * SF_SCREEN_W + x];
+  d = &fb[y * g_w + x];
   *d = pixproc(pix, luts, *d);
 }
 
@@ -306,11 +314,11 @@ fill_quad_box(uint16_t *fb, const float *px, const float *py, int x0, int x1,
   if (y0 < 0) {
     y0 = 0;
   }
-  if (x1 >= SF_SCREEN_W) {
-    x1 = SF_SCREEN_W - 1;
+  if (x1 >= g_w) {
+    x1 = g_w - 1;
   }
-  if (y1 >= SF_SCREEN_H) {
-    y1 = SF_SCREEN_H - 1;
+  if (y1 >= g_h) {
+    y1 = g_h - 1;
   }
   if ((px[0] == px[3] && px[1] == px[2] && py[0] == py[1] && py[2] == py[3]) ||
       (px[0] == px[1] && px[2] == px[3] && py[0] == py[3] && py[1] == py[2])) {
@@ -380,7 +388,7 @@ centre_ceil(float c)
    rasteriser needs, as plain typed fields. */
 typedef struct {
   const uint32_t *src; /* first row, after any preamble words */
-  int fbsrc;           /* source is a frame buffer (16 bpp rows of 320) */
+  int fbsrc;           /* source is a frame buffer (16 bpp rows of sf_fb_w) */
   int packed;          /* rows are RLE packets */
   int natural;         /* packed without PRE1: each row gives its own width */
   int bpp, coded, plutpos, skipx;
@@ -492,6 +500,32 @@ cel_prepare(const CCB *c, CEState *st, CelJob *j)
   j->Dy = st->hddy / 1048576.0f;
   j->X = st->xpos / 65536.0f;
   j->Y = st->ypos / 65536.0f;
+  if (sf_scale != 1) {
+    /* The game positions everything on the 320x240 logical screen; draw it
+       sf_scale times larger.  The engine state above stays logical (it
+       carries over to later cels in the list); only this cel's geometry is
+       scaled: P' = n * P for every texel corner. */
+    const float n = (float) sf_scale;
+    j->X *= n;
+    j->Y *= n;
+    if (fbsrc) {
+      /* A frame buffer as source (screen transitions) is sf_scale times
+         larger too: one texel per physical pixel, so with u' = n*u and
+         v' = n*v the corners n * P(u, v) need X' = nX, H' = H, V' = V and
+         D' = D/n. */
+      j->width *= sf_scale;
+      j->height *= sf_scale;
+      j->Dx /= n;
+      j->Dy /= n;
+    } else {
+      j->H0x *= n;
+      j->H0y *= n;
+      j->Vx *= n;
+      j->Vy *= n;
+      j->Dx *= n;
+      j->Dy *= n;
+    }
+  }
   return 1;
 }
 
@@ -508,7 +542,7 @@ cel_render(uint16_t *fb, const CelJob *j)
   const int force_p = j->force_p, skipx = j->skipx, height = j->height, bgnd = j->bgnd;
   const int fbsrc = j->fbsrc, natural = j->natural, stride_words = j->stride_words;
   int width = j->width, v, u;
-  uint32_t rowbuf[MAXW + 8];
+  uint32_t rowbuf[MAXROW + 8];
   {
     const float H0x = j->H0x, H0y = j->H0y, Vx = j->Vx, Vy = j->Vy, Dx = j->Dx, Dy = j->Dy;
     const float X = j->X, Y = j->Y;
@@ -532,12 +566,12 @@ cel_render(uint16_t *fb, const CelJob *j)
         int ya = centre_ceil(ry + u0 * Hy), yb = centre_ceil(ry + width * Hy);
         int yc = centre_ceil(ry2 + u0 * Hy2), yd = centre_ceil(ry2 + width * Hy2);
         int ymin = min4i(ya, yb, yc, yd), ymax = max4i(ya, yb, yc, yd);
-        int skip = ymin == ymax || ymax <= 0 || ymin >= SF_SCREEN_H;
+        int skip = ymin == ymax || ymax <= 0 || ymin >= g_h;
         if (!skip) {
           int xa = centre_ceil(rx + u0 * Hx), xb = centre_ceil(rx + width * Hx);
           int xc = centre_ceil(rx2 + u0 * Hx2), xd = centre_ceil(rx2 + width * Hx2);
           int xmin = min4i(xa, xb, xc, xd), xmax = max4i(xa, xb, xc, xd);
-          skip = xmin == xmax || xmax <= 0 || xmin >= SF_SCREEN_W;
+          skip = xmin == xmax || xmax <= 0 || xmin >= g_w;
         }
         if (skip) {
           if (packed && !fbsrc) {
@@ -550,7 +584,7 @@ cel_render(uint16_t *fb, const CelJob *j)
         }
       }
       if (fbsrc) {
-        const uint16_t *r = (const uint16_t *) src + (size_t) v * SF_SCREEN_W;
+        const uint16_t *r = (const uint16_t *) src + (size_t) v * g_w;
         for (u = 0; u < width; u++) {
           rowbuf[u] = r[u] & 0xffff; /* never transparent */
         }
@@ -607,7 +641,7 @@ cel_render(uint16_t *fb, const CelJob *j)
         cty0 = cty1;
         cbx0 = cbx1;
         cby0 = cby1;
-        if (x1 < x0 || y1 < y0 || x1 < 0 || y1 < 0 || x0 >= SF_SCREEN_W || y0 >= SF_SCREEN_H) {
+        if (x1 < x0 || y1 < y0 || x1 < 0 || y1 < 0 || x0 >= g_w || y0 >= g_h) {
           continue; /* covers no pixel centre, or off screen */
         }
         pix = lazy ? decode_texel_unpacked(rowdata, u, bpp, coded, plutpos, skipx, st, force_p)
@@ -630,6 +664,8 @@ draw_cels(int n, CCB *ccb)
   if (trace) {
     celtrace_begin(n & 1, fb, ccb, video_buffer(0), video_buffer(1));
   }
+  g_w = sf_fb_w;
+  g_h = sf_fb_h;
   memset(&st, 0, sizeof st);
   st.pixc = 0x1f001f00u;
   while (ccb) {

@@ -6,6 +6,8 @@ void music_poll(void);
 
 #define FRAME_MS 17 /* ~60 Hz VBL */
 
+int sf_scale = 1, sf_fb_w = SF_SCREEN_W, sf_fb_h = SF_SCREEN_H;
+
 static uint16_t *g_fb[2];
 static int g_back; /* buffer being drawn into */
 
@@ -19,16 +21,28 @@ static int g_display_br = 256;
 static uint32_t vbl_deadline;
 
 int
+video_set_scale(int n)
+{
+  if (n < 1 || n > SF_MAX_SCALE || g_fb[0]) {
+    return 0;
+  }
+  sf_scale = n;
+  sf_fb_w = SF_SCREEN_W * n;
+  sf_fb_h = SF_SCREEN_H * n;
+  return 1;
+}
+
+int
 video_open(void)
 {
-  int i;
+  int i, ok = plat_init(); /* may choose the scale (config.txt, SF_SCALE) */
   for (i = 0; i < 2; i++) {
     if (!g_fb[i]) {
-      g_fb[i] = (uint16_t *) calloc(SF_SCREEN_W * SF_SCREEN_H, 2);
+      g_fb[i] = (uint16_t *) calloc((size_t) sf_fb_w * sf_fb_h, 2);
     }
   }
   g_back = 0;
-  return plat_init();
+  return ok;
 }
 
 void
@@ -67,15 +81,37 @@ video_fill(int n, uint16_t colour)
 {
   uint16_t *d = g_fb[n & 1];
   int i;
-  for (i = 0; i < SF_SCREEN_W * SF_SCREEN_H; i++) {
+  for (i = 0; i < sf_fb_w * sf_fb_h; i++) {
     d[i] = colour;
+  }
+}
+
+void
+video_upscale(uint16_t *dst, const uint16_t *src)
+{
+  int x, y, k;
+  if (sf_scale == 1) {
+    memcpy(dst, src, SF_SCREEN_W * SF_SCREEN_H * 2);
+    return;
+  }
+  for (y = 0; y < SF_SCREEN_H; y++) {
+    uint16_t *d = dst + (size_t) y * sf_scale * sf_fb_w;
+    const uint16_t *s = src + (size_t) y * SF_SCREEN_W;
+    for (x = 0; x < SF_SCREEN_W; x++) {
+      for (k = 0; k < sf_scale; k++) {
+        d[x * sf_scale + k] = s[x];
+      }
+    }
+    for (k = 1; k < sf_scale; k++) {
+      memcpy(d + (size_t) k * sf_fb_w, d, (size_t) sf_fb_w * 2);
+    }
   }
 }
 
 void
 video_copy_in(int n, const uint16_t *image)
 {
-  memcpy(g_fb[n & 1], image, SF_SCREEN_W * SF_SCREEN_H * 2);
+  video_upscale(g_fb[n & 1], image);
 }
 
 void

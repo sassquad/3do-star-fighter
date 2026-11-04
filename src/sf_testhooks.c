@@ -39,6 +39,7 @@ static long maxframes = -1;
 static FILE *hashf, *statef, *recf, *wavf;
 static uint32_t wav_frames;
 static int trace_pad;
+static int scale; /* SF_SCALE, 0 if unset */
 static void (*exit_hook)(void);
 
 /* recorder state */
@@ -236,6 +237,14 @@ th_init(void)
     load_script(s);
   }
   trace_pad = getenv("SF_TRACE_PAD") != NULL;
+  if ((s = getenv("SF_SCALE")) && *s) {
+    char *end;
+    long n = strtol(s, &end, 10);
+    if (*end || n < 1 || n > SF_MAX_SCALE) {
+      fatal("SF_SCALE: expected 1 to 4", s);
+    }
+    scale = (int) n;
+  }
   hashf = open_out("SF_HASH", "w");
   statef = open_out("SF_STATE", "w");
   recf = open_out("SF_RECORD", "w");
@@ -259,6 +268,12 @@ th_init(void)
     alarm((unsigned) atoi(s));
   }
 #endif
+}
+
+int
+th_scale(void)
+{
+  return scale;
 }
 
 void
@@ -386,7 +401,7 @@ static void
 to_rgb(const uint16_t *fb, int br, unsigned char *rgb)
 {
   int i;
-  for (i = 0; i < 320 * 240; i++) {
+  for (i = 0; i < sf_fb_w * sf_fb_h; i++) {
     unsigned v = fb[i], r = (v >> 10) & 31, g = (v >> 5) & 31, b = v & 31;
     rgb[3 * i + 0] = (unsigned char) ((r * 255 / 31) * (unsigned) br / 256);
     rgb[3 * i + 1] = (unsigned char) ((g * 255 / 31) * (unsigned) br / 256);
@@ -397,13 +412,20 @@ to_rgb(const uint16_t *fb, int br, unsigned char *rgb)
 void
 th_frame(const uint16_t *fb, int br, uint32_t now_ms)
 {
-  static unsigned char rgb[320 * 240 * 3];
+  static unsigned char *rgb;
+  size_t rgb_bytes = (size_t) sf_fb_w * sf_fb_h * 3;
   int want_dump;
   frames++;
   last_br = br;
   t_at_present = now_ms;
   have_present = 1;
   want_dump = dumpdir && (frames % (uint32_t) dump_every) == 0;
+  if ((want_dump || hashf) && !rgb) {
+    rgb = (unsigned char *) malloc(rgb_bytes);
+    if (!rgb) {
+      fatal("out of memory", "frame dump");
+    }
+  }
   if (want_dump || hashf) {
     to_rgb(fb, br, rgb);
   }
@@ -413,18 +435,51 @@ th_frame(const uint16_t *fb, int br, uint32_t now_ms)
     snprintf(name, sizeof name, "%s/f%06u.ppm", dumpdir, frames);
     f = fopen(name, "wb");
     if (f) {
-      fprintf(f, "P6\n320 240\n255\n");
-      fwrite(rgb, 1, sizeof rgb, f);
+      fprintf(f, "P6\n%d %d\n255\n", sf_fb_w, sf_fb_h);
+      fwrite(rgb, 1, rgb_bytes, f);
       fclose(f);
     }
   }
   if (hashf) {
     uint64_t h = 1469598103934665603ull;
     size_t i;
-    for (i = 0; i < sizeof rgb; i++) {
+    for (i = 0; i < rgb_bytes; i++) {
       h = (h ^ rgb[i]) * 1099511628211ull;
     }
-    fprintf(hashf, "%u %016" PRIx64 "\n", frames, h); /* PRIx64: msvcrt too */
+    fprintf(hashf, "%u %016" PRIx64, frames, h); /* PRIx64: msvcrt too */
+    if (sf_scale > 1) {
+      /* Third column: if every sf_scale x sf_scale block is one colour, the
+         hash of the 320x240 image made of one pixel per block (it equals the
+         scale-1 hash of the same picture), else '-'.  Screens drawn only in
+         whole logical pixels (menus, text, videos) must give the scale-1
+         hash here. */
+      uint64_t lh = 1469598103934665603ull;
+      int x, y, k, blocky = 1;
+      for (y = 0; y < sf_fb_h && blocky; y++) {
+        const unsigned char *row = rgb + (size_t) y * sf_fb_w * 3,
+                            *top = rgb + (size_t) (y - y % sf_scale) * sf_fb_w * 3;
+        for (x = 0; x < sf_fb_w && blocky; x++) {
+          const unsigned char *b = top + (size_t) (x - x % sf_scale) * 3;
+          for (k = 0; k < 3; k++) {
+            blocky &= row[x * 3 + k] == b[k];
+          }
+        }
+      }
+      if (blocky) {
+        for (y = 0; y < sf_fb_h; y += sf_scale) {
+          for (x = 0; x < sf_fb_w; x += sf_scale) {
+            const unsigned char *p = rgb + ((size_t) y * sf_fb_w + x) * 3;
+            for (k = 0; k < 3; k++) {
+              lh = (lh ^ p[k]) * 1099511628211ull;
+            }
+          }
+        }
+        fprintf(hashf, " %016" PRIx64, lh);
+      } else {
+        fputs(" -", hashf);
+      }
+    }
+    fputc('\n', hashf);
   }
   if (statef) {
     write_state();

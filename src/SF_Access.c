@@ -269,7 +269,8 @@ load_backdrop(char *backdrop_name, int32_t load_over)
 
   if (backdrop == NULL) {
     backdrop = (ubyte *) calloc(
-        1, 320 * 240 * 2); // allocate backdrop buffer on first use
+        1, SF_SCREEN_W * SF_SCREEN_H * 2); // allocate backdrop buffer on first use
+                                           // (320x240: blown up when copied in)
   }
   (void) load_over;
   load_image_png(backdrop, backdrop_file); // Images/<name>.png

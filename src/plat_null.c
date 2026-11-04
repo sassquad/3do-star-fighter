@@ -11,6 +11,7 @@
  */
 #include "sf_platform.h"
 #include "sf_testhooks.h"
+#include "sf_videosys.h"
 
 static uint32_t vclock;
 static uint64_t audio_pulled;
@@ -33,6 +34,9 @@ int
 plat_init(void)
 {
   th_init();
+  if (th_scale()) {
+    video_set_scale(th_scale());
+  }
   return 1;
 }
 

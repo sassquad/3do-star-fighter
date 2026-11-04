@@ -1,4 +1,5 @@
-# Star Fighter keyboard controls, read from this file when the game starts.
+# Star Fighter keyboard controls and settings, read from this file when the
+# game starts.
 #
 #   CONTROL = key, key ...
 #
@@ -45,3 +46,8 @@ LS    = A
 
 # right shift; in flight (default setup) fire
 RS    = L
+
+# Display scale: the game is drawn at 320x240 times this number (1 to 4;
+# 2 = 640x480).  The 3D view gets sharper; the HUD, menus, text and videos
+# keep their size and look.  Higher scales need a faster computer.
+SCALE = 1

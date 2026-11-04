@@ -1,6 +1,6 @@
-/* sf_keyconfig.h - keyboard layout from a text file (config.txt).
+/* sf_keyconfig.h - keyboard layout and settings from a text file (config.txt).
  *
- * File format, one control per line:
+ * File format, one control or setting per line:
  *
  *     # comment
  *     START = Return, Space
@@ -14,6 +14,10 @@
  * its built-in keys; controls not listed keep them.  Each key may drive only
  * one control (sf_keyconfig_check).  The parser reports every mistake with its
  * line number; the game refuses to start if there are any.
+ *
+ * Settings use the same NAME = value form:
+ *
+ *     SCALE = 2         internal rendering scale, 1 to 4 (320x240 times n)
  *
  * Nothing here depends on SDL: key names are turned into key codes by the
  * caller's lookup function, so the parser can be tested without a display. */
@@ -63,6 +67,12 @@ int sf_keyconfig_check(const sf_keybind *binds, int n, sf_keyclash clash);
 /* Write a commented file describing the bindings. */
 void sf_keyconfig_write(FILE *f, const sf_keybind *binds, int n,
                         sf_keyname keyname);
+
+/* Settings.  The value of SCALE in 'text' (1..SF_MAX_SCALE), or 0 if the file
+   does not set it.  An invalid value is passed to warn and ignored. */
+int sf_config_scale(const char *text, sf_keywarn warn);
+/* Write the settings part of a commented file (after sf_keyconfig_write). */
+void sf_config_write_settings(FILE *f, int scale);
 
 /* Pad bits driven by a key. */
 uint32_t sf_keyconfig_mask(const sf_keybind *binds, int n, int32_t key);
