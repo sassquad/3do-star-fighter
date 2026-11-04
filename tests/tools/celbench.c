@@ -11,7 +11,7 @@
  *    measurement of the part of the game that takes ~95 % of the time.
  * Exit status 1 if any framebuffer differs. */
 #include "sf_compat.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 #include "sf_celtrace.h"
 #include "../ref/sf_cel_ref.c"
 #include <time.h>

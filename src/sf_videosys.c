@@ -1,5 +1,5 @@
-/* sf_video.c - screens and frame pacing (see sf_video.h) */
-#include "sf_video.h"
+/* sf_videosys.c - screens and frame pacing (see sf_videosys.h) */
+#include "sf_videosys.h"
 #include "sf_platform.h"
 
 void music_poll(void);

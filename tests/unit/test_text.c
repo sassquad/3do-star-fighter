@@ -3,7 +3,7 @@
  * `make test-asan` to catch a regression as a memory error). */
 #include "sft.h"
 #include "sf_compat.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 
 FontDescriptor *LoadFont(const char *path, int memtype);
 

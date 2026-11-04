@@ -114,7 +114,7 @@ typedef struct CCB {
 } CCB;
 
 /* ------------------------------------------------------------------ */
-/* Screens (see sf_video.h for the screen and frame-pacing API)        */
+/* Screens (see sf_videosys.h for the screen and frame-pacing API)        */
 /* ------------------------------------------------------------------ */
 #define SF_SCREEN_W 320
 #define SF_SCREEN_H 240
@@ -164,7 +164,7 @@ typedef struct TextCel {
 #define ControlLeftShift 0x00200000u
 
 /* ------------------------------------------------------------------ */
-/* Remaining shim API (text in sf_text.c; screens in sf_video.h)       */
+/* Remaining shim API (text in sf_text.c; screens in sf_videosys.h)   */
 /* ------------------------------------------------------------------ */
 
 /* 3DO mem */

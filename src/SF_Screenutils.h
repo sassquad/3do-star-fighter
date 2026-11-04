@@ -31,7 +31,7 @@
 
 /* External Variables */
 
-#include "sf_video.h"
+#include "sf_videosys.h"
 extern ubyte *backdrop;
 extern cel_celdata cel_quad;
 extern menu_info menu_status;

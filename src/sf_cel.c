@@ -23,7 +23,7 @@
  * intended percentages; the tables reproduce those percentages exactly).
  */
 #include "sf_compat.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 #include "sf_celtrace.h"
 #include <math.h>
 

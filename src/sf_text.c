@@ -37,7 +37,7 @@
  */
 #include "sf_compat.h"
 #include "sf_load.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 #include "sf_png.h"
 #include <stdio.h>
 #include <stdlib.h>

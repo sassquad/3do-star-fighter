@@ -7,7 +7,7 @@
 #include "SF_Screenutils.h"
 #include "SF_ARMSky.h"
 #include "SF_ARMCell.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 
 // Defines
 

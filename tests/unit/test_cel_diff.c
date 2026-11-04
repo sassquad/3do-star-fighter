@@ -10,7 +10,7 @@
  * optimised without re-recording any golden. */
 #include "sft.h"
 #include "sf_compat.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 #include "sf_shade_tables.h"
 #include "../ref/sf_cel_ref.c"
 

@@ -19,7 +19,7 @@
 // Externals
 
 extern message messages[FONT_MAXMESSAGE];
-#include "sf_video.h"
+#include "sf_videosys.h"
 
 // Function Prototypes
 

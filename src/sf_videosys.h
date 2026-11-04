@@ -1,4 +1,4 @@
-/* sf_video.h - screens and frame pacing for the port.
+/* sf_videosys.h - screens and frame pacing for the port.
  *
  * Replaces the 3DO Portfolio calls the game was written against (OpenGraphics,
  * ScreenContext/Item handles, DisplayScreen, CopyVRAMPages, SetVRAMPages,

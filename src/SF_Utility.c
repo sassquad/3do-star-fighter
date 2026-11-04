@@ -3,7 +3,7 @@
 //	General game utility routines
 
 #include "SF_Utility.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 #include "SF_Io.h"
 
 /**************************************/

@@ -139,7 +139,7 @@ extern char *map128;
 extern char *map32;
 extern char cache_lookup[64 * 64 * 2];
 extern char cache_free[CEL_MAXCREATION];
-#include "sf_video.h"
+#include "sf_videosys.h"
 extern int32_t cosine_table[2048];
 extern int32_t *sine_table;
 

@@ -9,7 +9,7 @@
 #include "SF_Palette.h"
 #include "SF_ARMCell.h"
 #include "SF_Screenutils.h"
-#include "sf_video.h"
+#include "sf_videosys.h"
 #include <string.h>
 
 //	Definitions

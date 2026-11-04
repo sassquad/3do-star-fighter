@@ -10,7 +10,7 @@
 
 // External Variables
 
-#include "sf_video.h"
+#include "sf_videosys.h"
 
 // Function Prototypes
 
