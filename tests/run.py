@@ -94,7 +94,8 @@ KEEP_AUDIO = set()  # scenarios whose scale-1 audio is kept for the scaled runs 
 # logical pixels), and its frames must match its own golden (tests/golden/<name>/scale<n>/).
 SCALED = {
     'quick': [(2, ['boot-to-menu', 'new-game-takeoff', 'weapons-and-views'])],
-    'full': [(2, None), (4, ['new-game-takeoff', 'weapons-and-views', 'mission-space', 'mission-ice'])],
+    'full': [(2, None), (4, ['new-game-takeoff', 'weapons-and-views', 'mission-space', 'mission-ice',
+                             'roll-and-turn'])],
 }
 # also under ASan (full suite)
 ASAN_SCALED = [(4, ['weapons-and-views', 'mission-ice'])]

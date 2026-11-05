@@ -1,0 +1,7 @@
+scenario: roll-and-turn
+scale: 4
+frames: 2200
+resources: f3f4f05fba0afcb4
+compiler: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+cflags: -O3 -g
+recorded: 2026-11-05 00:09:18

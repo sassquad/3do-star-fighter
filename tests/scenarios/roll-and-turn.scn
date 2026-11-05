@@ -1,0 +1,21 @@
+# Take off, then roll left and keep turning: the landscape and the sky are drawn at an angle.
+# Rolled, the sky's one-texel-per-line strips become long thin diagonal texels (filled as spans).
+description: new game, take off, roll and turn (rotated landscape and sky)
+suite: full
+frames: 2200
+performance: yes
+expect: first('status', 1, 700) is not None
+expect: at(1700)['zrot'] == 0 and at(1700)['status'] == 1
+expect: min(col('zrot', 1800, 2200)) > 200000
+expect: at(2200)['xrot'] != at(1800)['xrot']
+expect: last['lives'] == 3 and last['shields'] == 64
+script:
+300 304 DOWN
+330 336 A
+480 486 A
+600 606 A
+760 766 A
+900 906 A
+1100 1106 A
+1300 1500 A
+1700 1760 LEFT

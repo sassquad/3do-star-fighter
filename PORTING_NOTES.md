@@ -330,3 +330,37 @@ while the per-pixel work (filling, pixel processor, clears, fades, colour conver
 The game itself paces flight at 20 frames per second (15 in space), so even the slowest mission at 4x
 (91 fps) has about 4.5x headroom on this machine; a single-core machine of the SSE4.1 minimum's era
 may want 2x or 3x.
+
+## 13. Rotated view: the sky as spans (November 2026)
+
+Flying with the view rolled was much slower than level flight, at every scale (renderer time per
+frame, 40 frames of each, `celbench`): 1x 3.0 ms level / 14.1 ms rolled, 2x 7.8 / 47.7, 4x 22.5 / 181.
+Nothing in the rotation itself is expensive (the camera matrices are set up once per frame); the time
+went into the sky. `arm_plotsky` draws it as a cel one texel wide with one texel per screen line, each
+texel a strip up to 400 pixels long. Level, each strip is an axis-aligned rectangle and is filled
+directly. Tilted even slightly, each strip is a long thin diagonal texel, and the rasteriser tested
+every pixel centre of its bounding box: 93 % of all edge tests in rolled frames at 2x (434 M of 467 M
+over 40 frames), about 27 tests per pixel drawn.
+
+`fill_quad_box` now finds the covered pixels of each pixel row as spans when the box is at least
+8 pixels wide. A pixel is drawn iff its four edge values are all >= 0 or all <= 0, and each edge value
+`a - ey * ((x + 0.5f) - px)` is monotonic in x because every float operation in it rounds
+monotonically; so "e >= 0" and "e <= 0" each hold on a prefix or a suffix of the row, and the drawn
+pixels are the union of two intervals whose ends are found with the same float expression (start at
+the real crossing, step to the exact integer end). The pixels are bit-identical: every recorded cel
+trace replays identically, the differential test gained 600 cel lists of long thin texels at random
+angles (`test_long_thin_texels_match_reference`), and all goldens match. (The two intervals are never
+both non-empty in practice: along a row the four edge values sum to a constant, so that needs a
+degenerate quad. The code handles it anyway.)
+
+| Renderer, ms per frame | level before | level after | rolled before | rolled after |
+|---|---|---|---|---|
+| 1x | 3.0 | 3.2 | 14.1 | 4.7 |
+| 2x | 7.8 | 7.4 | 47.7 | 9.7 |
+| 4x | 22.5 | 17.6 | 181 | 22.4 |
+
+Whole game, `make test-performance ONLY=roll SCALE=n` (the scenario includes ~1,000 menu and
+briefing frames before the roll): 1x 219 -> 375 fps, 2x 76 -> 183, 4x 22 -> 79.
+
+New scenario `roll-and-turn` (full suite, `performance: yes`, goldens at 1x, 2x and 4x) keeps this
+covered.

@@ -298,6 +298,66 @@ put_px(uint16_t *fb, int x, int y, uint32_t pix, const PixLUT *luts, int bgnd)
        e = (px[j]-px[i])*(cy-py[i]) - (py[j]-py[i])*(cx-px[i])
    evaluated with exactly the same float operations as before; only the parts
    that do not change along a pixel row are computed once per row. */
+/* Boxes at least this many pixels wide are filled as spans (fill_quad_box);
+   narrower ones test each pixel centre.  Both give identical pixels. */
+#define SPAN_MIN 8
+
+/* One edge's value at pixel x of the row, exactly as fill_quad_box's
+   per-pixel test computes it. */
+static inline float
+edge_at(float a, float ey, float px, int x)
+{
+  float cx = x + 0.5f;
+  return a - ey * (cx - px);
+}
+
+static inline int
+edge_ok(float a, float ey, float px, int x, int sense)
+{
+  float e = edge_at(a, ey, px, x);
+  return sense > 0 ? e >= 0 : e <= 0;
+}
+
+/* Narrow [*lo, *hi] to the pixels where sense * edge >= 0.  The edge value
+   is monotonic in x, so that set is a prefix or a suffix of the row (or all
+   or nothing): start from the real-valued crossing and step to the exact
+   integer end with the exact expression. */
+static void
+span_limit(float a, float ey, float px, int sense, int *lo, int *hi)
+{
+  int l = *lo, h = *hi, t;
+  double g;
+  if (l > h) {
+    return;
+  }
+  if (ey == 0) { /* constant along the row */
+    if (!edge_ok(a, ey, px, l, sense)) {
+      *lo = h + 1;
+    }
+    return;
+  }
+  g = (double) px - 0.5 + (double) a / (double) ey; /* where the edge crosses 0 */
+  if ((sense > 0) == (ey > 0)) { /* holds for x <= t: find the largest such x */
+    t = g < l - 1 ? l - 1 : (g > h ? h : (int) floor(g));
+    while (t < h && edge_ok(a, ey, px, t + 1, sense)) {
+      t++;
+    }
+    while (t >= l && !edge_ok(a, ey, px, t, sense)) {
+      t--;
+    }
+    *hi = t;
+  } else { /* holds for x >= t: find the smallest such x */
+    t = g < l ? l : (g > h + 1 ? h + 1 : (int) ceil(g));
+    while (t > l && edge_ok(a, ey, px, t - 1, sense)) {
+      t--;
+    }
+    while (t <= h && !edge_ok(a, ey, px, t, sense)) {
+      t++;
+    }
+    *lo = t;
+  }
+}
+
 static void
 fill_quad_box(uint16_t *fb, const float *px, const float *py, int x0, int x1,
               int y0, int y1, uint32_t pix, const PixLUT *luts, int bgnd)
@@ -342,6 +402,38 @@ fill_quad_box(uint16_t *fb, const float *px, const float *py, int x0, int x1,
     float cy = y + 0.5f;
     for (i = 0; i < 4; i++) {
       a[i] = ex[i] * (cy - py[i]);
+    }
+    if (x1 - x0 >= SPAN_MIN) {
+      /* Wide box (long thin texels such as the sky's one-texel-per-line
+         strips once the view is rolled): find the covered pixels as spans
+         instead of testing every centre.  A pixel is drawn iff all four edge
+         values are >= 0 or all are <= 0.  Each edge value
+         a - ey * ((x + 0.5f) - px) is monotonic in x (every float operation
+         in it rounds monotonically), so "e >= 0" and "e <= 0" each hold on a
+         prefix or a suffix of the row: the drawn pixels are the union of two
+         intervals, whose ends are found with the same float expression. */
+      int alo = x0, ahi = x1, blo = x0, bhi = x1;
+      for (i = 0; i < 4 && (alo <= ahi || blo <= bhi); i++) {
+        span_limit(a[i], ey[i], px[i], 1, &alo, &ahi);
+        span_limit(a[i], ey[i], px[i], -1, &blo, &bhi);
+      }
+      if (alo > ahi) {
+        alo = blo;
+        ahi = bhi;
+      } else if (blo <= bhi) {
+        if (blo <= ahi + 1 && alo <= bhi + 1) { /* overlapping or adjacent: one span */
+          alo = alo < blo ? alo : blo;
+          ahi = ahi > bhi ? ahi : bhi;
+        } else {
+          for (x = blo; x <= bhi; x++) {
+            put_px(fb, x, y, pix, luts, bgnd);
+          }
+        }
+      }
+      for (x = alo; x <= ahi; x++) {
+        put_px(fb, x, y, pix, luts, bgnd);
+      }
+      continue;
     }
     for (x = x0; x <= x1; x++) {
       float cx = x + 0.5f;

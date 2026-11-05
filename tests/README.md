@@ -119,6 +119,7 @@ or play it on the SDL build with `SF_RECORD=my.script` and replay the recording 
 | `menus-tour` | full | configure, sound, controls, video toggle, config saved |
 | `no-videos` | full | `Video/` missing: videos skipped |
 | `boot-attract` | full | 44,000 idle frames: credits and the self-playing demo |
+| `roll-and-turn` | full | take off, then roll and keep turning: landscape and sky drawn at an angle (the sky's strips become long thin texels) |
 
 ## Goldens (`tests/golden/<scenario>/`)
 
@@ -141,7 +142,7 @@ compiler names; check the images and rebless.
 
 The game can render at 320x240 times n (`SCALE` in `config.txt`, `SF_SCALE=n`). `make test` runs
 `boot-to-menu`, `new-game-takeoff` and `weapons-and-views` again at scale 2; `make test-full` runs every
-scenario at scale 2, four at scale 4, and two at scale 4 under ASan (`SCALED` and `ASAN_SCALED` in
+scenario at scale 2, five at scale 4, and two at scale 4 under ASan (`SCALED` and `ASAN_SCALED` in
 `run.py`). Each scaled run must
 
 * play exactly as at scale 1: state log and audio identical (the resolution must never reach game
@@ -187,7 +188,7 @@ boots and that scripted input reaches a mission.
 ## Performance (`make test-performance`)
 
 Runs the scenarios that fly in the 3D game engine (those marked `performance: yes`: the missions,
-`new-game-takeoff`, `weapons-and-views`, `crash-and-game-over`) on the optimised headless build, one
+`new-game-takeoff`, `weapons-and-views`, `crash-and-game-over`, `roll-and-turn`) on the optimised headless build, one
 at a time, with no frame dumps, hashes, state log or audio capture, and prints frames per second:
 
     scenario                frames   fps(med)  fps(best)    cpu fps  spread

@@ -9,6 +9,7 @@
  * (HDD) quads, on and off the screen.  This is what lets the renderer be
  * optimised without re-recording any golden. */
 #include "sft.h"
+#include <math.h>
 #include "sf_compat.h"
 #include "sf_videosys.h"
 #include "sf_shade_tables.h"
@@ -214,12 +215,34 @@ fx(double v, int frac)
   return (int32_t) (v * (double) (1 << frac));
 }
 
+static int force_style = -1; /* >= 0: always this geometry style */
+
 static void
 random_geometry(CCB *c)
 {
-  int style = rint_(0, 5);
+  int style = force_style >= 0 ? force_style : rint_(0, 5);
   double hx, hy = 0, vx = 0, vy, ddx = 0, ddy = 0;
   switch (style) {
+  case 6: { /* long thin texels at any angle: the sky's one texel per screen
+               line, rolled (filled as spans, not pixel by pixel) */
+    double ang = rfloat(0, 6.283185307), len = rfloat(8, 450), wid = rfloat(0.05, 2.5);
+    hx = len * cos(ang);
+    hy = len * sin(ang);
+    vx = -wid * sin(ang) + rfloat(-0.3, 0.3);
+    vy = wid * cos(ang) + rfloat(-0.3, 0.3);
+    if (rint_(0, 2) == 0) { /* perspective, as the sky quads have */
+      ddx = rfloat(-0.5, 0.5);
+      ddy = rfloat(-0.5, 0.5);
+    }
+    if (rint_(0, 3) == 0) { /* or the long axis along V */
+      double t = hx;
+      hx = vx;
+      vx = t;
+      t = hy;
+      hy = vy;
+      vy = t;
+    }
+  } break;
   case 0: /* unit or integer scale, axis aligned */
     hx = rint_(1, 3) * (rint_(0, 3) ? 1 : -1);
     vy = rint_(1, 3) * (rint_(0, 3) ? 1 : -1);
@@ -418,6 +441,22 @@ TEST(test_random_cel_lists_match_reference)
   CHECK_EQ(bad, 0);
 }
 
+/* Long thin rotated texels, as the sky draws when the view is rolled: the
+   renderer fills wide pixel boxes as spans found from the edge functions;
+   the reference tests every pixel centre. */
+TEST(test_long_thin_texels_match_reference)
+{
+  int n, bad = 0;
+  force_style = 6;
+  for (n = 0; n < 600 && bad < 5; n++) {
+    if (!one_case(100000 + n)) {
+      bad++;
+    }
+  }
+  force_style = -1;
+  CHECK_EQ(bad, 0);
+}
+
 int
 main(void)
 {
@@ -428,5 +467,6 @@ main(void)
   }
   RUN(test_pixel_processor_matches_reference);
   RUN(test_random_cel_lists_match_reference);
+  RUN(test_long_thin_texels_match_reference);
   return SFT_END();
 }
