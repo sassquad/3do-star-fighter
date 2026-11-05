@@ -88,6 +88,11 @@ control_startmission(int32_t demo_mode)
 {
   int32_t object_loop;
 
+  // If cheating for extra lives, reset them at the start of every mission
+  if(cheat_feature2 == 1) {
+    status.lives =  99;
+  }
+
   // Initialise routines, tables etc. for mission
 
   arm_randominit(); // Reset random
