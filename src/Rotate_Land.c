@@ -14,6 +14,7 @@ Coord system bit 31-24 = grid pos (out of 256  -  2^8)
 #include "Plot_Land.h"
 #include "Misc_Struct.h"
 #include "Maths_Stuff.h"
+#include "sf_settings.h"
 
 void
 rotate_land(void)
@@ -75,8 +76,9 @@ rotate_land(void)
   // Setup the required data for the full res near by land grid
   // This is a 32 * 32 sprite grid - ie. 33 * 33 nodes are required
 
-  rot_data->x_pos = ((camera_x_position >> 24) - 16) & 255;
-  rot_data->y_pos = ((camera_y_position >> 24) - 16) & 255;
+  /* LAND_NEAR squares either side (default 16: a 32 x 32 grid) */
+  rot_data->x_pos = ((camera_x_position >> 24) - sf_land_near) & 255;
+  rot_data->y_pos = ((camera_y_position >> 24) - sf_land_near) & 255;
 
   // rot_data->offset_x = -((((( ( camera_x_position >> 12 ) & 4095 )
   // ROT_OFFSET) * cosine_table [ camera_x_rotation ] )>>12) +
@@ -109,15 +111,16 @@ rotate_land(void)
   rot_nodes[1] = -(((camera_y_position >> 12) & 4095) ROT_OFFSET);
   rot_nodes[2] = camera_z_position >> 12;
   rotate_land_node_from_c(&rot_nodes);
+  /* node 0 is LAND_NEAR + 1/2 squares back along both grid axes */
   rot_data->offset_x =
-      (rot_nodes[0]) -
-      (((hoz_x << 4) + (hoz_x >> 1) + (vert_x << 4) + (vert_x >> 1)));
+      (rot_nodes[0]) - (((hoz_x * sf_land_near) + (hoz_x >> 1) +
+                         (vert_x * sf_land_near) + (vert_x >> 1)));
   rot_data->offset_y =
-      (rot_nodes[1]) -
-      (((hoz_y << 4) + (hoz_y >> 1) + (vert_y << 4) + (vert_y >> 1)));
+      (rot_nodes[1]) - (((hoz_y * sf_land_near) + (hoz_y >> 1) +
+                         (vert_y * sf_land_near) + (vert_y >> 1)));
   rot_data->offset_z =
-      (rot_nodes[2]) -
-      (((hoz_z << 4) + (hoz_z >> 1) + (vert_z << 4) + (vert_z >> 1)));
+      (rot_nodes[2]) - (((hoz_z * sf_land_near) + (hoz_z >> 1) +
+                         (vert_z * sf_land_near) + (vert_z >> 1)));
 
   /*
   Setup the required data for the other non full res grids
@@ -135,10 +138,21 @@ rotate_land(void)
   rot_data = (rot_struct *) (&machine_code_vars[11]);
 
   for (loop = 0; loop <= 6; loop += 1) {
+    /* Grids 0 (medium, 4 squares per cell) and 1 (hills, 8 per cell) reach
+       LAND_MEDIUM and LAND_FAR squares either side; the flat rings (2..6) are
+       16 cells across.  half = half the grid, in cells. */
+    int32_t reach = step, half = 8;
+    if (loop == 0) {
+      reach = sf_land_medium;
+      half = sf_land_medium / 4;
+    } else if (loop == 1) {
+      reach = sf_land_far;
+      half = sf_land_far / 8;
+    }
 
     /* Setup pointer to outer grid start pos */
-    rot_data->x_pos = ((camera_x_position >> 24) - step) & bit_clear;
-    rot_data->y_pos = ((camera_y_position >> 24) - step) & bit_clear;
+    rot_data->x_pos = ((camera_x_position >> 24) - reach) & bit_clear;
+    rot_data->y_pos = ((camera_y_position >> 24) - reach) & bit_clear;
 
     // rot_data->offset_x = -((((( ( camera_x_position>>shift) &16383) -8192)
     // *cosine_table[camera_x_rotation])>>12) +
@@ -167,15 +181,17 @@ rotate_land(void)
     rot_nodes[1] = -(((camera_y_position >> shift) & 16383) - 8192);
     rot_nodes[2] = camera_z_position >> shift;
     rotate_land_node_from_c(&rot_nodes);
+    /* node 0 is half + 1/2 cells back along both axes; a cell is 4 steps
+       (default 8.5 cells = 34 steps) */
     rot_data->offset_x =
         (rot_nodes[0]) -
-        (((hoz_x << 5) + (hoz_x << 1) + (vert_x << 5) + (vert_x << 1)));
+        (((hoz_x * (4 * half + 2)) + (vert_x * (4 * half + 2))));
     rot_data->offset_y =
         (rot_nodes[1]) -
-        (((hoz_y << 5) + (hoz_y << 1) + (vert_y << 5) + (vert_y << 1)));
+        (((hoz_y * (4 * half + 2)) + (vert_y * (4 * half + 2))));
     rot_data->offset_z =
         (rot_nodes[2]) -
-        (((hoz_z << 5) + (hoz_z << 1) + (vert_z << 5) + (vert_z << 1)));
+        (((hoz_z * (4 * half + 2)) + (vert_z * (4 * half + 2))));
 
     rot_data += 1;
     shift += 1;
@@ -191,13 +207,15 @@ rotate_land(void)
   // Decide the resolution of the plot based on the camera height
   // res default = 0 - full res
 
-  if (camera_z_position > (32 * (1 << 24))) {
+  // (altitudes from config.txt: LAND_NEAR/MEDIUM/FAR_ALTITUDE, default 32/48/64)
+
+  if (camera_z_position > (sf_land_near_alt * (1 << 24))) {
     res = 1;
   }
-  if (camera_z_position > (48 * (1 << 24))) {
+  if (camera_z_position > (sf_land_medium_alt * (1 << 24))) {
     res = 2;
   }
-  if (camera_z_position > (64 * (1 << 24))) {
+  if (camera_z_position > (sf_land_far_alt * (1 << 24))) {
     res = 3;
   }
 

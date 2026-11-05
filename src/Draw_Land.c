@@ -18,6 +18,7 @@
 #include "SF_War.h"
 #include "Graphics_Set.h"
 #include "Weapons.h"
+#include "sf_settings.h"
 
 // Test stuff
 // #include "OperaMath.h"
@@ -29,6 +30,9 @@
    sub-pixel units, keeping the horizon point's fraction from the projection
    so the sky follows the land smoothly. */
 static int32_t sky_frac_x, sky_frac_y;
+
+/* ground objects found round the camera (up to 60 x 60 object-map cells) */
+static intptr_t object_found[(SF_OBJECT_DISTANCE_MAX / 2) * (SF_OBJECT_DISTANCE_MAX / 2) + 1];
 
 static void
 sky_quad_to_subpix(void)
@@ -62,6 +66,7 @@ draw_land()
   int32_t x_grid, y_grid;
   intptr_t *found = temp_store;
 
+  int32_t draw_long, in_range, in_draw, as_sprite;
   int32_t sound_dist_small_ship = 1 << 30;
   int32_t sound_dist_big_ship = 1 << 30;
 
@@ -86,7 +91,7 @@ draw_land()
   // }
 
   if (test_mode == 1) {
-    armzsort_add(size, players_ship, 0);
+    armzsort_add(size, players_ship, players_ship->can_see ? 0 : PLOT_AS_SPRITE);
     setup_rotations();
     cel_quad.x_pos0 = -SUBPIX(160);
     cel_quad.y_pos0 = -SUBPIX(120);
@@ -116,11 +121,21 @@ draw_land()
 
   // Find any ground objects in the area to plot
   // Only plot the ground objects if you are low
-  if (camera_z_position < (40 << 24) && camera_z_position > -(40 << 24)) {
-    // Find near by ground objects
-    x_grid = (((camera_x_position) >> 25) - 16) & 127;
-    y_grid = (((camera_y_position) >> 25) - 16) & 127;
-    scan_poly_map_2(x_grid, y_grid, found);
+  // (below BUILDING_ALTITUDE in config.txt, default 40; above the game's own
+  // 40 they are drawn but are not lock-on candidates)
+  if (camera_z_position < (sf_building_altitude << 24) &&
+      camera_z_position > -(sf_building_altitude << 24)) {
+    // Find near by ground objects: a window of OBJECT_DISTANCE / 2 object-map
+    // cells (2 squares each) round the camera, default 32 (+-32 squares).
+    // Objects outside the game's own 32-cell window are drawn but are not
+    // lock-on candidates.
+    int32_t cells = sf_object_distance / 2, x_orig, y_orig;
+    x_orig = ((((camera_x_position) >> 25) - 16) & 127) & ~3;
+    y_orig = (((camera_y_position) >> 25) - 16) & 127;
+    x_grid = (((camera_x_position) >> 25) - cells / 2) & 127;
+    y_grid = (((camera_y_position) >> 25) - cells / 2) & 127;
+    found = object_found;
+    scan_poly_map_window(x_grid, y_grid, found, cells);
 
     if (camera_z_position < 0) {
       temp_long = -(camera_z_position >> 2);
@@ -162,7 +177,12 @@ draw_land()
       }
 
       armzsort_add(size, // + temp_long ,
-                   (void *) *found, 4);
+                   (void *) *found,
+                   4 | ((((x_grid - x_orig) & 127) < 32 && ((y_grid - y_orig) & 127) < 32 &&
+                         camera_z_position < (40 << 24) &&
+                         camera_z_position > -(40 << 24))
+                            ? 0
+                            : PLOT_NO_LOCKON));
 
       found += 1;
     }
@@ -208,12 +228,34 @@ draw_land()
         }
       }
 
-      if ((x_pos - camera_x_position) < temp_long &&
-          (x_pos - camera_x_position) > -temp_long &&
-          (y_pos - camera_y_position) < temp_long &&
-          (y_pos - camera_y_position) > -temp_long &&
-          (z_pos - camera_z_position) < temp_long &&
-          (z_pos - camera_z_position) > -temp_long) {
+      // temp_long is the game's own range (1 << 30 or 1 << 29, 0 when
+      // cloaked): it decides can_see and the engine sounds.  draw_long is the
+      // drawing range, scaled by OBJECT_DISTANCE (equal at the default).
+      draw_long = (temp_long == (1 << 30))   ? (sf_object_distance << 24)
+                  : (temp_long == (1 << 29)) ? (sf_object_distance << 23)
+                                             : 0;
+      in_range = (x_pos - camera_x_position) < temp_long &&
+                 (x_pos - camera_x_position) > -temp_long &&
+                 (y_pos - camera_y_position) < temp_long &&
+                 (y_pos - camera_y_position) > -temp_long &&
+                 (z_pos - camera_z_position) < temp_long &&
+                 (z_pos - camera_z_position) > -temp_long;
+      in_draw = (x_pos - camera_x_position) < draw_long &&
+                (x_pos - camera_x_position) > -draw_long &&
+                (y_pos - camera_y_position) < draw_long &&
+                (y_pos - camera_y_position) > -draw_long &&
+                (z_pos - camera_z_position) < draw_long &&
+                (z_pos - camera_z_position) > -draw_long;
+
+      if (!in_range) {
+        if (temp_long == 0) {
+          ship->can_see = TRUE;
+        } else {
+          ship->can_see = FALSE;
+        }
+      }
+
+      if (in_range || in_draw) {
         // find the greatest x,y,z dist
         size_x = x_pos - camera_x_position;
         if (size_x < 0) {
@@ -237,27 +279,38 @@ draw_land()
           size = size_z;
         }
 
-        ship->can_see = TRUE;
-
-        if ((ship->type >> 4) == SMALL_SHIP ||
-            (ship->type >> 4) == PLAYERS_SHIP) {
-          if (size < sound_dist_small_ship) {
-            sound_dist_small_ship = size;
-            sound_small_ship = ship;
-          }
-        }
-
+        // drawn as a distant sprite beyond half the drawing range
+        as_sprite = 0;
         if ((ship->type >> 4) == SMALL_SHIP || (ship->type >> 4) == WEAPON ||
             (ship->type >> 4) == PARACHUTE) {
-          if (size > (temp_long >> 1)) {
-            ship->can_see = FALSE;
+          if (size > (draw_long >> 1)) {
+            as_sprite = PLOT_AS_SPRITE;
           }
         }
 
-        if ((ship->type >> 4) == BIG_SHIP) {
-          if (size < sound_dist_big_ship) {
-            sound_dist_big_ship = size;
-            sound_big_ship = ship;
+        if (in_range) { // game state: as the original
+          ship->can_see = TRUE;
+
+          if ((ship->type >> 4) == SMALL_SHIP ||
+              (ship->type >> 4) == PLAYERS_SHIP) {
+            if (size < sound_dist_small_ship) {
+              sound_dist_small_ship = size;
+              sound_small_ship = ship;
+            }
+          }
+
+          if ((ship->type >> 4) == SMALL_SHIP || (ship->type >> 4) == WEAPON ||
+              (ship->type >> 4) == PARACHUTE) {
+            if (size > (temp_long >> 1)) {
+              ship->can_see = FALSE;
+            }
+          }
+
+          if ((ship->type >> 4) == BIG_SHIP) {
+            if (size < sound_dist_big_ship) {
+              sound_dist_big_ship = size;
+              sound_big_ship = ship;
+            }
           }
         }
 
@@ -286,12 +339,8 @@ draw_land()
           size = 0;
         }
 
-        armzsort_add(size, ship, 0);
-      } else {
-        if (temp_long == 0) {
-          ship->can_see = TRUE;
-        } else {
-          ship->can_see = FALSE;
+        if (in_draw) {
+          armzsort_add(size, ship, as_sprite | (in_range ? 0 : PLOT_NO_LOCKON));
         }
       }
     }
@@ -316,12 +365,12 @@ draw_land()
 
   while ((smoke->header).status == 1) {
 
-    if (smoke->x_pos - camera_x_position < 1 << 30 &&
-        smoke->x_pos - camera_x_position > -1 << 30 &&
-        smoke->y_pos - camera_y_position < 1 << 30 &&
-        smoke->y_pos - camera_y_position > -1 << 30 &&
-        smoke->z_pos - camera_z_position < 1 << 30 &&
-        smoke->z_pos - camera_z_position > -1 << 30) {
+    if (smoke->x_pos - camera_x_position < (sf_object_distance << 24) &&
+        smoke->x_pos - camera_x_position > -(sf_object_distance << 24) &&
+        smoke->y_pos - camera_y_position < (sf_object_distance << 24) &&
+        smoke->y_pos - camera_y_position > -(sf_object_distance << 24) &&
+        smoke->z_pos - camera_z_position < (sf_object_distance << 24) &&
+        smoke->z_pos - camera_z_position > -(sf_object_distance << 24)) {
 
       // find the greatest x,y,z dist
       size_x = (smoke->x_pos) - camera_x_position;
@@ -364,12 +413,12 @@ draw_land()
 
   while ((laser->header).status == 1) {
 
-    if (laser->x_pos - camera_x_position < 1 << 30 &&
-        laser->x_pos - camera_x_position > -1 << 30 &&
-        laser->y_pos - camera_y_position < 1 << 30 &&
-        laser->y_pos - camera_y_position > -1 << 30 &&
-        laser->z_pos - camera_z_position < 1 << 30 &&
-        laser->z_pos - camera_z_position > -1 << 30) {
+    if (laser->x_pos - camera_x_position < (sf_object_distance << 24) &&
+        laser->x_pos - camera_x_position > -(sf_object_distance << 24) &&
+        laser->y_pos - camera_y_position < (sf_object_distance << 24) &&
+        laser->y_pos - camera_y_position > -(sf_object_distance << 24) &&
+        laser->z_pos - camera_z_position < (sf_object_distance << 24) &&
+        laser->z_pos - camera_z_position > -(sf_object_distance << 24)) {
 
       // find the greatest x,y,z dist
       size_x = (laser->x_pos) - camera_x_position +
@@ -410,12 +459,12 @@ draw_land()
 
   while ((bit->header).status == 1) {
 
-    if (bit->x_pos - camera_x_position < 1 << 30 &&
-        bit->x_pos - camera_x_position > -1 << 30 &&
-        bit->y_pos - camera_y_position < 1 << 30 &&
-        bit->y_pos - camera_y_position > -1 << 30 &&
-        bit->z_pos - camera_z_position < 1 << 30 &&
-        bit->z_pos - camera_z_position > -1 << 30) {
+    if (bit->x_pos - camera_x_position < (sf_object_distance << 24) &&
+        bit->x_pos - camera_x_position > -(sf_object_distance << 24) &&
+        bit->y_pos - camera_y_position < (sf_object_distance << 24) &&
+        bit->y_pos - camera_y_position > -(sf_object_distance << 24) &&
+        bit->z_pos - camera_z_position < (sf_object_distance << 24) &&
+        bit->z_pos - camera_z_position > -(sf_object_distance << 24)) {
 
       // find the greatest x,y,z dist
       size_x = (bit->x_pos) - camera_x_position;

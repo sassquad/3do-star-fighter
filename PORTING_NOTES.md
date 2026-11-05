@@ -364,3 +364,61 @@ briefing frames before the roll): 1x 219 -> 375 fps, 2x 76 -> 183, 4x 22 -> 79.
 
 New scenario `roll-and-turn` (full suite, `performance: yes`, goldens at 1x, 2x and 4x) keeps this
 covered.
+
+## 14. Draw distances in config.txt (November 2026)
+
+`src/sf_settings.c/.h`: `LAND_NEAR`, `LAND_MEDIUM`, `LAND_FAR`, `LAND_NEAR_ALTITUDE`,
+`LAND_MEDIUM_ALTITUDE`, `LAND_FAR_ALTITUDE`, `OBJECT_DISTANCE`, `BUILDING_ALTITUDE`, in map squares (1 << 24 world units;
+the map is 256 x 256 squares and wraps). Defaults are the game's own values (16, 32, 64; 32, 48, 64;
+64; 40); at the defaults every frame and sound is unchanged (full test suite). Read by the SDL build from
+`config.txt` (written into a new file with comments), checked like the key bindings: a bad value is
+reported with its line and the game does not start. The headless test build uses the defaults.
+
+**Landscape.** The land is not cut off by distance tests: it is drawn as square grids centred on the
+camera, far to near, each finer one drawn over the middle of the coarser one (`Plot_Land.c`):
+
+| Grid | Cell | Default | Setting | Nodes (default / max) |
+|---|---|---|---|---|
+| near (one texture per square) | 1 square | 32 x 32 cells, +-16 | `LAND_NEAR` 4-32, multiple of 4 | 33^2 / 65^2 |
+| medium (16x16 cels from 4x4 tiles) | 4 squares | 16 x 16, +-32 | `LAND_MEDIUM` 8-64, multiple of 8 | 17^2 / 33^2 |
+| far, the hills | 8 squares | 16 x 16, +-64 | `LAND_FAR` 16-128, multiple of 8 | 17^2 / 33^2 |
+| 5 flat rings (no height) | 16-256 squares | 16 x 16 each | unchanged | 5 x 17^2 |
+
+What became variable (all equal to the old constants at the defaults): grid sizes and node numbering
+(`land_layout`; node arrays 3200 -> 8192), the grids' origins and centring in `rotate_land()`, the
+ring corners (`grid_rings`), the hole each ring leaves for the finer grid (`n < 6` was "inner grid
+in this grid's cells, minus one cell of overlap all round": `LAND_NEAR / 2 - 2`, `LAND_MEDIUM / 4 - 2`),
+the nodes left unwritten inside that hole, the edge rows and columns of the medium grid whose heights
+are averaged to meet the far grid, the neighbour offsets of the section plotters, and the z-sort
+bucket below which objects are drawn before the hills (`LAND_FAR`). The constraints on the values
+keep those holes and grids whole and symmetric. The altitudes replace the 32/48/64 tests in
+`rotate_land()`; the number of flat rings still follows the resolution.
+
+The medium grid builds its 16x16 cels in a cache of 255 slots (8-bit slot numbers), enough for the
+default grid. A larger `LAND_MEDIUM` adds a per-frame overflow pool (`arm_overflowcreation`) used
+when the cache is full; at the default there is no pool, as before.
+
+**Objects** (`Draw_Land.c`), scaled by `OBJECT_DISTANCE` / 64 (16-120, multiple of 8; below 128 so
+coordinate differences cannot wrap round the map):
+
+| Objects | Drawn within (default) | 3D within |
+|---|---|---|
+| big ships, sections, satellites, smoke, lasers, explosion debris | `OBJECT_DISTANCE` (64) | all |
+| fighters, parachutes | `OBJECT_DISTANCE` (64) | half (32), sprites beyond |
+| other ships and ground vehicles | half (32) | all |
+| missiles | half (32) | a quarter (16) |
+| buildings and other ground objects | object-map window of `OBJECT_DISTANCE / 2` cells (+-32) | all |
+
+Game logic in the drawing code keeps the game's ranges, so larger distances change only the picture:
+`can_see` (drives fighter thrusters and their smoke) and the nearest-ship engine sounds use the
+original boxes; objects drawn only because of a larger distance carry `PLOT_NO_LOCKON` in their
+z-sort entry and are never lock-on candidates; whether a ship is drawn as a sprite is decided in
+`draw_land` (`PLOT_AS_SPRITE`) instead of from `can_see`. Checked: with every distance at its maximum
+the game-state log is identical to the default build's in `weapons-and-views`, `roll-and-turn`,
+`crash-and-game-over`, `mission-ice`, `mission-space` and `mission-earth2`. The plot list holds 4096
+objects instead of 1024 when `OBJECT_DISTANCE` is above 64, and the z-sort bucket is clamped to 127.
+Buildings and other ground objects are drawn only below `BUILDING_ALTITUDE` (1-127, default 40)
+squares of camera altitude; above the game's own 40 they are drawn but are not lock-on candidates.
+
+**Cost** (headless, 1x, whole scenario including menus): all distances at their maximum,
+`roll-and-turn` 416 -> 261 fps, `mission-ice` unchanged.

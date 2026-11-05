@@ -35,6 +35,7 @@ arm_celinitialisecreation(void *,
                           int32_t); // Initialise preambles in 'created' cels
 extern void arm_initialisecache(void *); // Initialise cache
 extern void arm_updatecache(void *);     // Update cache frame counters
+extern void arm_overflowcreation(int32_t); // Overflow pool for created cels
 
 extern void arm_generatemaps(void *, void *); // Initialise the large scale maps
 extern void arm_addcelfrom512map(void *, int32_t, int32_t,

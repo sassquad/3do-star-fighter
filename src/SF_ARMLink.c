@@ -271,6 +271,9 @@ armzsort_add(int32_t distance, void *graphic, int32_t ref)
     return;
   } /* subs/movmi: note count is only stored on success */
   idx = distance >> 24;
+  if (idx > 127) { /* only reachable with draw distances near the maximum */
+    idx = 127;
+  }
   r4 = zs_list->offset[idx];
   entry = zs_next;
   if (r4 == NULL) { /* empty group */

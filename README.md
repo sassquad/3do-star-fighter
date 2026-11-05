@@ -49,6 +49,16 @@ menus, map, text, backdrops and videos are the original art and keep their size 
 becomes n x n). The game plays exactly the same at every scale. Higher scales cost CPU time: see
 `PORTING_NOTES.md` §12 for measured frame rates.
 
+**Draw distances.** Also in `config.txt`, in map squares (the map is 256 x 256 squares and wraps):
+`LAND_NEAR` (16), `LAND_MEDIUM` (32) and `LAND_FAR` (64) set how far the landscape is drawn in full
+detail, in medium detail and with hills and mountains (flat beyond); `LAND_NEAR_ALTITUDE` (32),
+`LAND_MEDIUM_ALTITUDE` (48) and `LAND_FAR_ALTITUDE` (64) the camera altitude above which each detail
+level is dropped; `OBJECT_DISTANCE` (64) how far 3D objects are drawn (fighters, ground vehicles and
+buildings within half of it); `BUILDING_ALTITUDE` (40) the camera altitude above which buildings and
+other ground objects are not drawn. The values in brackets are the game's own and are written into a new
+`config.txt`; the file explains the allowed ranges. Only drawing changes: lock-on range, which
+ships count as visible and the game itself are unaffected. Larger distances cost CPU time.
+
 ## Resources
 
 `SF_Resources` is the game's data. The backdrops (`Images/*.png`) and fonts (`Fonts/*.png` + `.txt`)

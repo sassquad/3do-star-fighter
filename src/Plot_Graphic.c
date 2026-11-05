@@ -981,6 +981,8 @@ plot_ship(ship_stack *ship)
                 0);
 }
 
+int32_t plot_ship_sprite, plot_lockon_ok = 1; /* see Plot_Graphic.h */
+
 void
 plot_ship_graphic(void *p)
 {
@@ -988,7 +990,10 @@ plot_ship_graphic(void *p)
   int32_t t, x, y, z;
   i_am_a_ship = 0;
   i_am_a_object = 0;
-  if (ship->can_see == 0) {
+  /* sprite or 3D was decided by draw_land (the original read can_see, which
+     draw_land had just set the same way; with OBJECT_DISTANCE in config.txt
+     the drawing range and the game's visibility range can differ) */
+  if (plot_ship_sprite) {
     plot_this_distant_ship(ship);
   } else {
     plot_ship(ship);
@@ -1008,8 +1013,8 @@ plot_ship_graphic(void *p)
   x = iabs32(plot_graphic_pos[0]);
   y = plot_graphic_pos[1];
   z = iabs32(plot_graphic_pos[2]);
-  if (!(x > air_to_air_x) && !(y < (x << 2)) && !(y < (z << 2)) &&
-      ship_to_plot_ship) {
+  if (plot_lockon_ok && !(x > air_to_air_x) && !(y < (x << 2)) &&
+      !(y < (z << 2)) && ship_to_plot_ship) {
     t = ship_to_plot_ship->type;
     if (t < 256) {
       int32_t g = t >> 4;
@@ -1117,6 +1122,10 @@ plot_static_from_grid(void *gridref)
     return;
   }
   if (iabs32(z) > lim) {
+    return;
+  }
+  if (!plot_lockon_ok) { /* beyond the game's own range: drawn only */
+    plot_static_graphic(x, y, z, type);
     return;
   }
   if (are_we_in_space_or_wot != 0) {

@@ -26,6 +26,26 @@ static int32_t arm_codedskipx;
 
 int cel_subpix; /* see sf_compat.h */
 
+/* Overflow pool for created 16x16 land cels (arm_add4cel4), reused every
+   frame; only allocated for a medium grid larger than the default. */
+static uint8_t *cel_overflow;
+static int32_t cel_overflow_slots, cel_overflow_used;
+
+void
+arm_overflowcreation(int32_t slots)
+{
+  free(cel_overflow);
+  cel_overflow = NULL;
+  cel_overflow_slots = 0;
+  if (slots > 0) {
+    cel_overflow = (uint8_t *) calloc((size_t) slots + 1, 264);
+    if (cel_overflow) {
+      cel_overflow_slots = slots;
+      arm_celinitialisecreation(cel_overflow, slots + 2); /* PRE0/PRE1 words */
+    }
+  }
+}
+
 static int32_t
 clampshade(int32_t s, int32_t max)
 {
@@ -255,12 +275,20 @@ arm_add4cel4(void *celquad, void *polymap, int32_t x, int32_t y)
                          asm's "+16" only offsets its pre-decrement reads) */
     const uint8_t *m;
     if (slot_count < 0) {
-      return;
+      /* Cache full.  A medium grid larger than the game's (LAND_MEDIUM in
+         config.txt) can need more cels than the cache's 255 slots: build
+         this one in the per-frame overflow pool instead, uncached.  Without
+         a pool (the default size) the cel is left out, as it always was. */
+      if (cel_overflow_used >= cel_overflow_slots) {
+        return;
+      }
+      source = (uint32_t *) (cel_overflow + (size_t) cel_overflow_used++ * 264);
+    } else {
+      cq->cache_freecount = slot_count;
+      entry[0] = 2;
+      entry[1] = (uint8_t) cq->cache_free[slot_count];
+      source = (uint32_t *) (creation + entry[1] * 264);
     }
-    cq->cache_freecount = slot_count;
-    entry[0] = 2;
-    entry[1] = (uint8_t) cq->cache_free[slot_count];
-    source = (uint32_t *) (creation + entry[1] * 264);
     out = source + 2; /* skip PRE0/PRE1 */
     m = map + x + ((y + 3) << 8);
     for (g = 3; g >= 0; g--) {
@@ -389,6 +417,7 @@ arm_initialisecache(void *celquad)
 void
 arm_updatecache(void *celquad)
 {
+  cel_overflow_used = 0; /* a new frame: the overflow pool is free again */
   cel_celdata *cq = (cel_celdata *) celquad;
   uint8_t *lookup = (uint8_t *) cq->cache_lookup,
           *freel = (uint8_t *) cq->cache_free, *p;

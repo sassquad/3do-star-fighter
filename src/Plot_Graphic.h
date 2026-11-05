@@ -29,6 +29,13 @@ extern void plot_bit(void *);
 extern void rotate_sky_node(void *);
 extern void plot_planets(void);
 
+/* Flags added to an object's z-sort ref by draw_land (see plot_sorted_graphics):
+   draw a ship as a distant sprite; the object is beyond the game's own range
+   (drawn because of a larger OBJECT_DISTANCE): not a lock-on candidate. */
+#define PLOT_AS_SPRITE 16
+#define PLOT_NO_LOCKON 32
+extern int32_t plot_ship_sprite, plot_lockon_ok;
+
 #ifndef __GRAPHIC_STUFF_H
 #define __GRAPHIC_STUFF_H
 

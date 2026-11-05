@@ -227,16 +227,16 @@ mc_smoke_mover(void *p)
    cells <= 8 (variant 1) or cells < 248 (variant 2).  Results are terminated
    with -1. */
 static void
-scan_map(int32_t x, int32_t y, intptr_t *found, int variant2)
+scan_map_n(int32_t x, int32_t y, intptr_t *found, int variant2, int cells)
 {
   const uint8_t *map = (const uint8_t *) poly_map;
   int row, col, b;
   int32_t x_start =
       x & ~3; /* quad-align x: the window starts here on every row */
-  for (row = 0; row < 32; row++) {
+  for (row = 0; row < cells; row++) {
     x = x_start; /* the assembler steps x back to the row start (subs r0,r0,#28)
                   */
-    for (col = 0; col < 8; col++) {
+    for (col = 0; col < cells / 4; col++) {
       int32_t idx = x + (y << 7);
       for (b = 0; b < 4; b++) {
         int v = map[idx + b];
@@ -251,6 +251,12 @@ scan_map(int32_t x, int32_t y, intptr_t *found, int variant2)
   *found = -1;
 }
 
+static void
+scan_map(int32_t x, int32_t y, intptr_t *found, int variant2)
+{
+  scan_map_n(x, y, found, variant2, 32); /* the game's 32 x 32 cell window */
+}
+
 void
 scan_poly_map(int32_t x, int32_t y, void *found)
 {
@@ -261,4 +267,12 @@ void
 scan_poly_map_2(int32_t x, int32_t y, void *found)
 {
   scan_map(x, y, (intptr_t *) found, 1);
+}
+
+/* scan_poly_map_2 over a window of 'cells' x 'cells' (a multiple of 4, at most
+   64): found needs room for cells * cells + 1 entries */
+void
+scan_poly_map_window(int32_t x, int32_t y, void *found, int32_t cells)
+{
+  scan_map_n(x, y, (intptr_t *) found, 1, cells);
 }

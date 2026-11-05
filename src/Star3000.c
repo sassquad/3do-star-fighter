@@ -19,6 +19,7 @@ INCLUDE FILES /
 ****************************************************************************************************/
 
 #include "SF_ARMLink.h"
+#include "sf_settings.h"
 #include "SF_ARMCell.h"
 #include "SF_ARMSky.h"
 #include "SF_ARMBurn.h"
@@ -243,7 +244,15 @@ main(int argc, char **argv)
                             CEL_MAXCREATION); // Initialise creation cels
   font_initialise(cel_text);                  // Init menu fonts
 
-  armzsort_create(&plot_list, MAX_GRAPHICPLOT); // Initialise plotting list
+  // Larger draw distances than the game's (config.txt) need room for more
+  // objects in the plot list and, for a larger medium landscape grid, an
+  // overflow pool of created land cels.  At the defaults both are as before.
+  arm_overflowcreation(sf_land_medium > SF_LAND_MEDIUM_DEFAULT
+                           ? (sf_land_medium / 2) * (sf_land_medium / 2)
+                           : 0);
+  armzsort_create(&plot_list, sf_object_distance > SF_OBJECT_DISTANCE_DEFAULT
+                                  ? MAX_GRAPHICPLOT_ALL
+                                  : MAX_GRAPHICPLOT); // Initialise plotting list
   io_resetvideocounter(MAX_WAITBEFOREVIDEO);    // Reset timeout counter
   control_initialisecameras(); // Reset default cameras at start of game
   control_startgame(0, 0);     // Setup player for new game

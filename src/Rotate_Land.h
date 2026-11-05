@@ -9,8 +9,8 @@ extern int32_t quick_height_table[256][4];
 
 /* Setup data tables for the maps etc. */
 extern char landscape_heights[256][256];
-extern int32_t rotated_coords[3200][3];
-extern int32_t screen_coords[3200][2];
+extern int32_t rotated_coords[8192][3];
+extern int32_t screen_coords[8192][2];
 extern int32_t graphics_data[19000];
 extern int32_t star_coords[128][4];
 

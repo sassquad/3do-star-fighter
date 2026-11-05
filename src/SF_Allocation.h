@@ -28,6 +28,7 @@
 
 #define MAX_MENUS 18         // Max number of menus available
 #define MAX_GRAPHICPLOT 1024 // Max number of graphics that can be added
+#define MAX_GRAPHICPLOT_ALL 4096 // ... with a larger OBJECT_DISTANCE (config.txt)
 
 #define FONT_MAXAVAILABLE 2 // Max numbers of fonts that can be loaded in
 #define FONT_MAXMENU 20     // Max number of menutext cels allowed

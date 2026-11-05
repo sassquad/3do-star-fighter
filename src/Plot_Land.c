@@ -8,9 +8,12 @@
  * static objects).
  *
  * rotated_coords [node][3] and screen_coords [node][2] are indexed by node
- * number: 0 ..1088  33x33 near grid      1089..1377  17x17 mid grid 1378..1666
- * 17x17 far grid 1667 + 289*k  : flat rings k = 0..4 Where a resolution is not
- * needed its slots are simply not written (as in the original).
+ * number: the near grid ((2 LAND_NEAR + 1)^2 nodes, default 33x33), then the
+ * mid grid ((LAND_MEDIUM / 2 + 1)^2, default 17x17), the far (hill) grid
+ * ((LAND_FAR / 4 + 1)^2, default 17x17), then flat rings k = 0..4 (17x17 each).
+ * Where a resolution is not needed its slots are simply not written (as in
+ * the original).  The grid sizes come from config.txt (sf_settings.h); at the
+ * defaults every number below is the original one.
  */
 #include "Plot_Land.h"
 #include "Plot_Graphic.h"
@@ -20,10 +23,32 @@
 #include "Setup_Tables.h"
 #include "SF_Access.h"
 #include "arm_ops.h"
+#include "sf_settings.h"
 
-#define NODES_NEAR (33 * 33)
-#define NODES_RING (17 * 17)
-#define FLAT_BASE (NODES_NEAR + 2 * NODES_RING)
+#define NODES_RING (17 * 17) /* a flat ring */
+
+/* Grid sizes in cells (nodes per side = cells + 1), node numbers where each
+   grid starts, and the hole each ring leaves for the finer grid inside it.
+   Set from the settings by land_layout() each frame. */
+static int32_t near_cells, mid_cells, far_cells;  /* default 32, 16, 16 */
+static int32_t mid_base, far_base, flat_base;     /* default 1089, 1378, 1667 */
+static int32_t mid_hole, far_hole;                /* default 6, 6 (cells) */
+static int32_t ring_w; /* nodes per row of the grid being plotted */
+
+static void
+land_layout(void)
+{
+  near_cells = 2 * sf_land_near;
+  mid_cells = sf_land_medium / 2;
+  far_cells = sf_land_far / 4;
+  mid_base = (near_cells + 1) * (near_cells + 1);
+  far_base = mid_base + (mid_cells + 1) * (mid_cells + 1);
+  flat_base = far_base + (far_cells + 1) * (far_cells + 1);
+  /* The finer grid covers inner_cells of this grid's cells; this ring is
+     drawn down to a hole one cell smaller all round (one cell of overlap). */
+  mid_hole = sf_land_near / 2 - 2;  /* near grid in 4-square cells */
+  far_hole = sf_land_medium / 4 - 2; /* mid grid in 8-square cells */
+}
 
 extern int32_t test_mode;
 extern zsort_list plot_list;
@@ -83,18 +108,21 @@ enum { ROW_PLAIN, ROW_FIX, ROW_SKIPMID };
 
 enum { GRID_MID, GRID_LOW, GRID_FLAT };
 
-/* One 17x17 grid.  blk = {x, y, posx, posy, posz}.  xstep = map units per node
-   (4 or 8). Rows are visited in the original order; in 'skip middle' rows the
-   five middle nodes (6..10) are left unwritten. */
+/* One grid of n x n cells ((n + 1)^2 nodes; 16 for the original 17x17
+   grids).  blk = {x, y, posx, posy, posz}.  xstep = map units per node (4 or
+   8).  hole = cells in the middle left for the finer grid; their inner nodes
+   (default 6..10) are left unwritten in 'skip middle' rows.  Rows are visited
+   in the original order. */
 static void
-grid17(int32_t *out, const int32_t *blk, int kind, int xstep, int skipmid)
+grid17(int32_t *out, const int32_t *blk, int kind, int xstep, int skipmid,
+       int n, int hole)
 {
   int32_t y0 = blk[1], x0 = blk[0], p0[3] = {blk[2], blk[3], blk[4]};
   int sh = (kind == GRID_MID) ? 6 : 7;
-  int row, c;
+  int row, c, lo = (n - hole) / 2 + 1, hi = (n + hole) / 2 - 1;
 
-  for (row = 0; row <= 16; row++) {
-    int32_t rr = 16 - row,
+  for (row = 0; row <= n; row++) {
+    int32_t rr = n - row,
             y = (y0 + row * xstep) & 255; /* rr = the original's y_loop_count */
     int mode;
     if (row == 0) {
@@ -103,16 +131,16 @@ grid17(int32_t *out, const int32_t *blk, int kind, int xstep, int skipmid)
       mode = ROW_FIX;
     } else if (skipmid) {
       mode = ROW_PLAIN;
-    } else if (rr >= 11 || rr <= 5) {
+    } else if (rr > hi || rr < lo) {
       mode = ROW_PLAIN;
     } else {
       mode = ROW_SKIPMID;
     }
 
-    for (c = 0; c <= 16; c++) {
+    for (c = 0; c <= n; c++) {
       int32_t x = (x0 + c * xstep) & 255, h, pos[3];
-      int32_t *dst = &out[(row * 17 + c) * 3];
-      if (mode == ROW_SKIPMID && c >= 6 && c <= 10) {
+      int32_t *dst = &out[(row * (n + 1) + c) * 3];
+      if (mode == ROW_SKIPMID && c >= lo && c <= hi) {
         continue;
       }
       pos[0] = p0[0] + (rd_step[0] << 2) * c;
@@ -127,7 +155,7 @@ grid17(int32_t *out, const int32_t *blk, int kind, int xstep, int skipmid)
       if (kind == GRID_MID) {
         if (mode == ROW_FIX && (x & 4)) {
           h = hoz_fix(x, y);
-        } else if (c == 0 || c == 16) {
+        } else if (c == 0 || c == n) {
           h = vert_fix(x, y);
         } else {
           h = HM(x, y);
@@ -150,11 +178,19 @@ fast_rotation(void *rotdata, int32_t res)
   int32_t *out = &rotated_coords[0][0];
   int32_t *qht = &quick_height_table[0][0];
   int32_t v[3], a[3], b[3], e, i, k;
-  static const int32_t node_offs[4] = {0, NODES_NEAR, NODES_NEAR + NODES_RING,
-                                       NODES_NEAR + 2 * NODES_RING};
-  static const int32_t counters[4] = {NODES_NEAR + 4 * NODES_RING,
-                                      5 * NODES_RING, 5 * NODES_RING,
-                                      5 * NODES_RING};
+  int32_t node_offs[4], counters[4];
+
+  land_layout();
+  /* first node projected, and how many, per resolution: the grids drawn at
+     it and the flat rings (res + 2 of them) */
+  node_offs[0] = 0;
+  node_offs[1] = mid_base;
+  node_offs[2] = far_base;
+  node_offs[3] = flat_base;
+  counters[0] = flat_base + 2 * NODES_RING;
+  counters[1] = flat_base - mid_base + 3 * NODES_RING;
+  counters[2] = flat_base - far_base + 4 * NODES_RING;
+  counters[3] = 5 * NODES_RING;
 
   land_resolution = res;
   /* quick height table: entry h = h * (rotated unit height vector); [17..]
@@ -206,13 +242,13 @@ fast_rotation(void *rotdata, int32_t res)
   land_x_pos = rd[0];
   land_y_pos = rd[1];
 
-  if (res <= 0) { /* near grid, 33x33 */
+  if (res <= 0) { /* near grid, default 33x33 */
     int32_t row, c, p0[3] = {rd[2], rd[3], rd[4]};
-    for (row = 0; row <= 32; row++) {
-      for (c = 0; c <= 32; c++) {
+    for (row = 0; row <= near_cells; row++) {
+      for (c = 0; c <= near_cells; c++) {
         int32_t pos[3] = {p0[0] + rd_step[0] * c, p0[1] + rd_step[1] * c,
                           p0[2] + rd_step[2] * c};
-        put_node(out + (row * 33 + c) * 3, pos,
+        put_node(out + (row * (near_cells + 1) + c) * 3, pos,
                  HM(land_x_pos + c, land_y_pos + row), 6);
       }
       p0[0] += rd_row[0];
@@ -223,12 +259,13 @@ fast_rotation(void *rotdata, int32_t res)
   land_x_pos_outer = rd[11];
   land_y_pos_outer = rd[12];
   if (res <= 1) {
-    grid17(out + NODES_NEAR * 3, rd + 11, GRID_MID, 4, res);
+    grid17(out + mid_base * 3, rd + 11, GRID_MID, 4, res, mid_cells, mid_hole);
   }
   land_x_pos_outer_2 = rd[16];
   land_y_pos_outer_2 = rd[17];
   if (res <= 2) {
-    grid17(out + (NODES_NEAR + NODES_RING) * 3, rd + 16, GRID_LOW, 8, res == 2);
+    grid17(out + far_base * 3, rd + 16, GRID_LOW, 8, res == 2, far_cells,
+           far_hole);
   }
   for (k = 0; k < 5; k++) { /* flat rings */
     if (k == 2 && res <= 0) {
@@ -242,8 +279,8 @@ fast_rotation(void *rotdata, int32_t res)
     }
     flat_x[k] = rd[21 + 5 * k];
     flat_y[k] = rd[22 + 5 * k];
-    grid17(out + (FLAT_BASE + k * NODES_RING) * 3, rd + 21 + 5 * k, GRID_FLAT,
-           4, (k == 0) ? (res == 3) : 0);
+    grid17(out + (flat_base + k * NODES_RING) * 3, rd + 21 + 5 * k, GRID_FLAT,
+           4, (k == 0) ? (res == 3) : 0, 16, 6);
   }
 
   /* perspective: nodes in front of the camera are scaled; others keep
@@ -395,10 +432,10 @@ plot_land_section(int32_t node, int32_t x, int32_t y)
     if (RC(node + 1)[1] < -8192) {
       return;
     }
-    if (RC(node + 33)[1] < -8192) {
+    if (RC(node + ring_w)[1] < -8192) {
       return;
     }
-    if (RC(node + 34)[1] < -8192) {
+    if (RC(node + ring_w + 1)[1] < -8192) {
       return;
     }
   }
@@ -409,7 +446,7 @@ plot_land_section(int32_t node, int32_t x, int32_t y)
   if (h <= 16) {
     update_waves(x, y);
   }
-  load_quad(v, node + 33, node + 34, node + 1, node);
+  load_quad(v, node + ring_w, node + ring_w + 1, node + 1, node);
   if (cross1(v) < 0 && cross2(v) < 0) {
     return; /* both triangles face away */
   }
@@ -443,7 +480,7 @@ plot_land_section_2(int32_t node, int32_t x, int32_t y)
   }
   x &= 252;
   y &= 252;
-  load_quad(v, node, node + 1, node + 18, node + 17);
+  load_quad(v, node, node + 1, node + ring_w + 1, node + ring_w);
   if (cross1(v) >= 0 && cross2(v) >= 0) {
     return; /* this grid uses the opposite sense */
   }
@@ -475,7 +512,7 @@ plot_land_section_3(int32_t node, int32_t x, int32_t y)
   }
   x &= 252;
   y &= 252;
-  load_quad(v, node, node + 1, node + 18, node + 17);
+  load_quad(v, node, node + 1, node + ring_w + 1, node + ring_w);
   if (cross1(v) >= 0 && cross2(v) >= 0) {
     return;
   }
@@ -548,7 +585,13 @@ plot_sorted_graphics(void)
       do {
         zsort_item *next = item->next_address;
         void *g = item->graphic_address;
-        switch (item->ref) {
+        /* ref: kind in the low 4 bits; draw_land adds PLOT_AS_SPRITE for a
+           ship drawn as a distant sprite and PLOT_NO_LOCKON for an object
+           beyond the game's own range (drawn only because OBJECT_DISTANCE in
+           config.txt is larger: not a lock-on candidate) */
+        plot_ship_sprite = (item->ref & PLOT_AS_SPRITE) != 0;
+        plot_lockon_ok = (item->ref & PLOT_NO_LOCKON) == 0;
+        switch (item->ref & 15) {
           case 0:
             plot_ship_graphic(g);
             break;
@@ -587,8 +630,10 @@ typedef void (*section_fn)(int32_t node, int32_t x, int32_t y);
    z-sort bucket (n>>1, n<<1, n<<2) and how the loop ends. */
 static void
 ring_plotter(section_fn fn, int W, int sh, int32_t x, int32_t y, int32_t c0,
-             int32_t c1, int32_t c2, int32_t c3, int32_t n, int search_mode)
+             int32_t c1, int32_t c2, int32_t c3, int32_t n, int search_mode,
+             int hole)
 {
+  ring_w = W;
   for (;;) {
     int32_t r5, half = n >> 1, i, e = n << sh;
     fn(c0, x, y);
@@ -626,7 +671,7 @@ ring_plotter(section_fn fn, int W, int sh, int32_t x, int32_t y, int32_t c0,
         if (!(n >= 1)) {
           return;
         }
-      } else if (n < 6) {
+      } else if (n < hole) { /* the finer grid covers the middle (default 6) */
         return;
       }
     }
@@ -639,20 +684,31 @@ ring_plotter(section_fn fn, int W, int sh, int32_t x, int32_t y, int32_t c0,
   }
 }
 
+/* A grid of n cells starting at node 'base': its corner cells' nodes
+   (default near grid: 0, 31, 1023, 1054; mid: 1089, 1104, 1344, 1359; far:
+   1378, 1393, 1633, 1648) and its outermost ring n - 1. */
+static void
+grid_rings(section_fn fn, int sh, int32_t x, int32_t y, int32_t base, int n,
+           int search_mode, int hole)
+{
+  int W = n + 1;
+  ring_plotter(fn, W, sh, x, y, base, base + n - 1, base + (n - 1) * W,
+               base + (n - 1) * W + n - 1, n - 1, search_mode, hole);
+}
+
 static void
 sorted_land_plotter(void)
 {
   hill_shade_offset = 15;
-  ring_plotter(plot_land_section, 33, 0, land_x_pos, land_y_pos, 0, 31, 1023,
-               1054, 31, 0);
+  grid_rings(plot_land_section, 0, land_x_pos, land_y_pos, 0, near_cells, 0, 0);
 }
 
 static void
 mid_res_sorted_land_plotter(void)
 {
   hill_shade_offset = 11;
-  ring_plotter(plot_land_section_2, 17, 2, land_x_pos_outer, land_y_pos_outer,
-               1089, 1104, 1344, 1359, 15, 1);
+  grid_rings(plot_land_section_2, 2, land_x_pos_outer, land_y_pos_outer,
+             mid_base, mid_cells, 1, mid_hole);
 }
 
 static void
@@ -660,8 +716,8 @@ low_res_sorted_land_plotter(void)
 {
   land_size = 0;
   hill_shade_offset = 7;
-  ring_plotter(plot_land_section_3, 17, 3, land_x_pos_outer_2,
-               land_y_pos_outer_2, 1378, 1393, 1633, 1648, 15, 2);
+  grid_rings(plot_land_section_3, 3, land_x_pos_outer_2, land_y_pos_outer_2,
+             far_base, far_cells, 2, far_hole);
 }
 
 /* 16x16 block of flat cells starting at node 'node'; step = map units per cell
@@ -689,31 +745,31 @@ flat_low_res_sorted_land_plotter(void)
   land_size_flat = 1;
   land_res_flat = 2;
   flat_shade = 5;
-  flat_low_res_plotter(FLAT_BASE, flat_x[0], flat_y[0], 16);
+  flat_low_res_plotter(flat_base, flat_x[0], flat_y[0], 16);
   plot_res_skip_middle = 0;
   land_size_flat = 2;
   land_res_flat = 1;
   flat_shade = 3;
-  flat_low_res_plotter(FLAT_BASE + NODES_RING, flat_x[1], flat_y[1], 32);
+  flat_low_res_plotter(flat_base + NODES_RING, flat_x[1], flat_y[1], 32);
   if (land_resolution == 0) {
     return;
   }
   land_size_flat = 3;
   flat_shade = 2;
-  flat_low_res_plotter(FLAT_BASE + 2 * NODES_RING, flat_x[2], flat_y[2], 64);
+  flat_low_res_plotter(flat_base + 2 * NODES_RING, flat_x[2], flat_y[2], 64);
   if (land_resolution <= 1) {
     return;
   }
   land_size_flat = 4;
   flat_shade = 1;
-  flat_low_res_plotter(FLAT_BASE + 3 * NODES_RING, flat_x[3], flat_y[3], 128);
+  flat_low_res_plotter(flat_base + 3 * NODES_RING, flat_x[3], flat_y[3], 128);
   land_res_flat = 0;
   if (land_resolution <= 2) {
     return;
   }
   land_size_flat = 5;
   flat_shade = 0;
-  flat_low_res_plotter(FLAT_BASE + 4 * NODES_RING, flat_x[4], flat_y[4], 256);
+  flat_low_res_plotter(flat_base + 4 * NODES_RING, flat_x[4], flat_y[4], 256);
 }
 
 void
@@ -731,7 +787,9 @@ machine_code_land_plot(void)
   if (test_mode == 1) {
     space_mission_or_wot = 1;
   }
-  search_plot_to_here = (space_mission_or_wot != 1) ? 64 : ~256;
+  /* first the objects beyond the hills (LAND_FAR squares, default 64) */
+  search_plot_to_here =
+      (space_mission_or_wot != 1) ? (sf_land_far < 127 ? sf_land_far : 127) : ~256;
   plot_sorted_graphics();
   plot_res_skip_middle = 0;
   if (space_mission_or_wot == 1) {

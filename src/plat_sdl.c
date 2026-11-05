@@ -266,20 +266,21 @@ load_keys(void)
     if (scale) {
       video_set_scale(scale);
     }
+    sf_config_settings(text, key_warning); /* draw distances */
   }
   free(text);
   fclose(f);
   if (nkey_problems) {
     char title[64];
     fprintf(stderr,
-            "%s has %d problem%s; fix %s or delete the file to use the default "
-            "keys\n",
+            "%s has %d problem%s; fix %s or delete the file to use the "
+            "defaults\n",
             KEYS_FILE, nkey_problems, nkey_problems == 1 ? "" : "s",
             nkey_problems == 1 ? "it" : "them");
     snprintf(title, sizeof title, "Star Fighter: problems in %s", KEYS_FILE);
     if (strlen(key_problems) + 80 < sizeof key_problems) {
-      strcat(key_problems, "\nFix the file, or delete it to use the default "
-                           "keys.");
+      strcat(key_problems, "\nFix the file, or delete it to use the "
+                           "defaults.");
     }
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, key_problems, NULL);
     SDL_Quit();

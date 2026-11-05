@@ -25,7 +25,7 @@
 
 // Structure definitions for award crystals
 
-typedef int32_t (*CrystalFunction)(int32_t, int32_t, int32_t);
+typedef int32_t (*CrystalFunction)();
 
 typedef struct crystal_award // Definition of awards structure
 {

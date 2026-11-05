@@ -1,5 +1,6 @@
 /* sf_keyconfig.c - keyboard layout from config.txt (see sf_keyconfig.h). */
 #include "sf_keyconfig.h"
+#include "sf_settings.h"
 #include "sf_compat.h"
 #include <ctype.h>
 #include <string.h>
@@ -108,7 +109,55 @@ warn_(sf_keywarn warn, int line, const char *problem, const char *text)
 static int
 is_setting(const char *name)
 {
-  return same_ci(name, "SCALE");
+  int i;
+  if (same_ci(name, "SCALE")) {
+    return 1;
+  }
+  for (i = 0; i < sf_settings_count(); i++) {
+    if (same_ci(name, sf_settings_name(i))) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int
+sf_config_settings(const char *text, sf_keywarn warn)
+{
+  int lineno = 0, problems = 0, which = 0, lines[32] = {0};
+  const char *p = text, *bad;
+  while (p && *p) {
+    const char *end = strchr(p, '\n'), *eq;
+    size_t len = end ? (size_t) (end - p) : strlen(p);
+    char line[512], name[64], value[512];
+    int i;
+    lineno++;
+    trimmed(line, sizeof line, p, len);
+    p = end ? end + 1 : NULL;
+    if (!line[0] || line[0] == '#' || !(eq = strchr(line, '='))) {
+      continue;
+    }
+    trimmed(name, sizeof name, line, (size_t) (eq - line));
+    trimmed(value, sizeof value, eq + 1, strlen(eq + 1));
+    for (i = 0; i < sf_settings_count() && i < 32; i++) {
+      if (same_ci(name, sf_settings_name(i))) {
+        char *e;
+        long n = strtol(value, &e, 10);
+        bad = (!value[0] || *e) ? "not a whole number" : sf_settings_set(i, n);
+        if (bad) {
+          warn_(warn, lineno, bad, value);
+          problems++;
+        } else {
+          lines[i] = lineno;
+        }
+      }
+    }
+  }
+  if (!problems && (bad = sf_settings_check(&which)) != NULL) {
+    warn_(warn, lines[which], bad, sf_settings_name(which));
+    problems++;
+  }
+  return problems;
 }
 
 int
@@ -153,6 +202,7 @@ sf_config_write_settings(FILE *f, int scale)
           "computer.\n"
           "SCALE = %d\n",
           scale);
+  sf_settings_write(f);
 }
 
 int

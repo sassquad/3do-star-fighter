@@ -9,6 +9,7 @@ extern void target_finder(void *);
 extern void mc_smoke_mover(void *);
 extern void scan_poly_map(int32_t, int32_t, void *);
 extern void scan_poly_map_2(int32_t, int32_t, void *);
+extern void scan_poly_map_window(int32_t, int32_t, void *, int32_t);
 
 #ifndef MATHS_STUFF_EXTRA
 #define MATHS_STUFF_EXTRA

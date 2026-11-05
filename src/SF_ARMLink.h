@@ -34,7 +34,7 @@ typedef struct zsort_item {
 
 typedef struct zsort_list {
   zsort_item *offset[128];
-  zsort_item graphic[MAX_GRAPHICPLOT];
+  zsort_item graphic[MAX_GRAPHICPLOT_ALL]; /* MAX_GRAPHICPLOT used at the defaults */
 } zsort_list;
 
 extern void armlink_initialise(int32_t, void *, int32_t,

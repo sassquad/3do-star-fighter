@@ -94,8 +94,8 @@ int32_t star_coords[128][4];
 // Setup temp workspace for rotated coords and screen coords
 
 // For use by the landscape rotator
-int32_t rotated_coords[3200][3];
-int32_t screen_coords[3200][2];
+int32_t rotated_coords[8192][3];
+int32_t screen_coords[8192][2];
 
 // For use by the graphics - ships , static objects , explosion bits etc.
 int32_t graphic_rotated_coords[256][4];

@@ -48,13 +48,13 @@ pex_fix(int32_t depth, int32_t table_value)
   return (cel_subpix && depth >= 1024) ? (int32_t) (12582912 / depth)
                                        : table_value;
 }
-extern int32_t rotated_coords[3200][3];
+extern int32_t rotated_coords[8192][3];
 
 extern char height_map[256][256];
 extern char sprite_map[256][256];
 extern char poly_map[128][128];
 
-extern int32_t screen_coords[3200][2];
+extern int32_t screen_coords[8192][2];
 extern int32_t graphic_rotated_coords[256][4];
 extern int32_t graphic_screen_coords[256][2];
 extern int32_t quick_height_table[256][4];

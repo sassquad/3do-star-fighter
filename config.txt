@@ -51,3 +51,28 @@ RS    = L
 # 2 = 640x480).  The 3D view gets sharper; the HUD, menus, text and videos
 # keep their size and look.  Higher scales need a faster computer.
 SCALE = 1
+
+# Draw distances, in map squares (the map is 256 x 256 squares and wraps round).
+# The landscape is drawn in full detail within LAND_NEAR (4-32, multiple of 4),
+# in medium detail within LAND_MEDIUM (8-64, multiple of 8) and with hills and
+# mountains within LAND_FAR (16-128, multiple of 8); beyond that it is drawn flat.
+# Each must be larger than the one before.  Larger distances need a faster computer.
+LAND_NEAR = 16
+LAND_MEDIUM = 32
+LAND_FAR = 64
+
+# Camera altitude, in map squares (1-127), above which each level of landscape
+# detail is no longer drawn (each no lower than the one before).
+LAND_NEAR_ALTITUDE = 32
+LAND_MEDIUM_ALTITUDE = 48
+LAND_FAR_ALTITUDE = 64
+
+# 3D objects (16-120, multiple of 8): big ships, smoke, lasers and debris are drawn
+# within OBJECT_DISTANCE; fighters, ground vehicles and buildings within half of it
+# (fighters further away as small sprites).  Lock-on and the game itself are not
+# affected.
+OBJECT_DISTANCE = 64
+
+# Camera altitude, in map squares (1-127), above which buildings and other ground
+# objects are no longer drawn.  Lock-on is not affected.
+BUILDING_ALTITUDE = 40
