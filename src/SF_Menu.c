@@ -1378,7 +1378,7 @@ menu menus[MAX_MENUS] =
 /***************************************************************************************************/
 
 void
-menu_moveup(int32_t nothing)
+menu_moveup(int32_t nothing, int32_t nothing2)
 
 // Purpose : Enters previous menu without resetting it's position to top
 // Accepts : Nothing
@@ -1403,7 +1403,7 @@ menu_moveup(int32_t nothing)
 /**************************************/
 
 void
-menu_movedown(int32_t new_menu)
+menu_movedown(int32_t new_menu, int32_t unused)
 
 // Purpose : Enters sub menu (setting it's position to top)
 // Accepts : Nothing
@@ -1831,7 +1831,7 @@ menu_update(int32_t keypad, int32_t keypad_constant)
       menu_updatejukeboxmenu(keypad); // Update jukebox menu ?
       break;
     case FLIGHTCONTROL_MENU:
-      menu_updateflightc(keypad); // Update flight controls menu ?
+      menu_updateflightc(keypad, 0); // Update flight controls menu ?
       break;
   }
 
@@ -1840,7 +1840,7 @@ menu_update(int32_t keypad, int32_t keypad_constant)
   if (keypad & (ControlStart | ControlX)) {
     keypad &= (~(ControlX | ControlStart));
     sound_playsample(SOUND_CLICK, 70, 127, 0);
-    menu_moveup(0);
+    menu_moveup(0, 0);
     return (0);
   }
 
@@ -1883,9 +1883,9 @@ menu_update(int32_t keypad, int32_t keypad_constant)
       if (item_update->function != NULL) // Call correct function (if defined)
       {
         if (item_update->function_value == -1) {
-          item_update->function(item_update->cur_selection);
+          item_update->function(item_update->cur_selection, 0);
         } else {
-          item_update->function(item_update->function_value);
+          item_update->function(item_update->function_value, 0);
         }
       }
 
@@ -2081,7 +2081,7 @@ menu_display(int32_t title_background)
 /***************************************************************************************************/
 
 void
-menu_setlevel(int32_t level_select)
+menu_setlevel(int32_t level_select, int32_t unused)
 
 // Purpose : Select next level
 // Accepts : Nothing
@@ -2089,7 +2089,7 @@ menu_setlevel(int32_t level_select)
 
 {
   parameters.level = level_select;
-  menu_moveup(0);
+  menu_moveup(0, 0);
 }
 
 /***************************************************************************************************/
@@ -2099,7 +2099,7 @@ menu_setlevel(int32_t level_select)
 /***************************************************************************************************/
 
 void
-menu_quitgame(int32_t confirmed)
+menu_quitgame(int32_t confirmed, int32_t unused)
 
 // Purpose : Quits game and returns to main menu
 // Accepts : Nothing
@@ -2111,7 +2111,7 @@ menu_quitgame(int32_t confirmed)
         WHITE_15; // Set 'Confirm' colour to white
   } else {
     status.status = STATUS_GAMEOVER; // Else quit game (confirmed)
-    menu_moveup(0);
+    menu_moveup(0, 0);
   }
 }
 
@@ -2332,7 +2332,7 @@ menu_updatecamerapos(int32_t keypad_constant, int32_t keypad,
 /***************************************************************************************************/
 
 void
-menu_changeformmode(int32_t new_mode)
+menu_changeformmode(int32_t new_mode, int32_t unused)
 
 // Purpose : Sets new control mode for formation
 // Accepts : New control mode
@@ -2346,11 +2346,11 @@ menu_changeformmode(int32_t new_mode)
       break;
 
     case SDB_FORMATION_DEFENSIVE:
-      menu_formationgroup(0);
+      menu_formationgroup(0, 0);
       break;
 
     case SDB_FORMATION_AGGRESSIVE:
-      menu_formationattack(1);
+      menu_formationattack(1, 0);
       break;
   }
 }
@@ -2461,7 +2461,7 @@ menu_displayformation(int32_t formation_display)
 /**************************************/
 
 void
-menu_formationgroup(int32_t nothing)
+menu_formationgroup(int32_t nothing, int32_t nothing2)
 
 // Purpose : Regroup friendly formation
 // Accepts : Nothing
@@ -2502,7 +2502,7 @@ menu_formationgroup(int32_t nothing)
 /**************************************/
 
 void
-menu_formationattack(int32_t all)
+menu_formationattack(int32_t all, int32_t unused)
 
 // Purpose : Send friendly formation into attack
 // Accepts : Flag to send ALL formation into attack (1), or just enough for a 1
@@ -2543,7 +2543,7 @@ menu_formationattack(int32_t all)
 /***************************************************************************************************/
 
 void
-menu_trackset(int32_t track_number)
+menu_trackset(int32_t track_number, int32_t unused)
 
 // Purpose : Toggle a track on / off
 // Accepts : Nothing
@@ -2569,7 +2569,7 @@ menu_trackset(int32_t track_number)
 /**************************************/
 
 void
-menu_musicset(int32_t music_status)
+menu_musicset(int32_t music_status, int32_t unused)
 
 // Purpose : Change music mode
 // Accepts : Nothing
@@ -2589,7 +2589,7 @@ menu_musicset(int32_t music_status)
 /**************************************/
 
 void
-menu_soundset(int32_t sound_status)
+menu_soundset(int32_t sound_status, int32_t unused)
 
 // Purpose : Change sound mode
 // Accepts : Nothing
@@ -2833,7 +2833,7 @@ menu_displayjukebox(void)
 /***************************************************************************************************/
 
 void
-menu_loadgame(int32_t slot_toload)
+menu_loadgame(int32_t slot_toload, int32_t unused)
 
 // Purpose : Load in a saved game from NVRAM
 // Accepts : Menu item number holding filename
@@ -2893,7 +2893,7 @@ menu_loadgame(int32_t slot_toload)
 /**************************************/
 
 void
-menu_savegamefile(int32_t nothing)
+menu_savegamefile(int32_t nothing, int32_t nothing2)
 
 // Purpose : Gets filename to save file as - Then saves file OR enters SAVEGAME
 // menu if an existing file needs to be replaced Accepts : Nothing Returns :
@@ -2909,16 +2909,16 @@ menu_savegamefile(int32_t nothing)
 
   if (nvram_directory(SAVE_MENU, 0, 6, ITEM_OK, GAMEFILE_PREFIX) >=
       7) {                    // How many already in ?
-    menu_movedown(SAVE_MENU); // Replace file ?
+    menu_movedown(SAVE_MENU, 0); // Replace file ?
   } else {
-    menu_savegame(-1); // Or just save straight
+    menu_savegame(-1, 0); // Or just save straight
   }
 }
 
 /**************************************/
 
 void
-menu_savegame(int32_t slot_tosave)
+menu_savegame(int32_t slot_tosave, int32_t unused)
 
 // Purpose : Deletes any file already in the slot (unless slot < 0), then Save a
 // saved game to NVRAM Accepts : Menu item number holding saveslot Returns : (0)
@@ -2963,7 +2963,7 @@ menu_savegame(int32_t slot_tosave)
 /***************************************************************************************************/
 
 void
-menu_setcontrol(int32_t control_type)
+menu_setcontrol(int32_t control_type, int32_t unused)
 
 // Purpose : Sets current control method
 // Accepts : New Control Method
@@ -2980,7 +2980,7 @@ menu_setcontrol(int32_t control_type)
 /**************************************/
 
 void
-menu_setupstick(int32_t nothing)
+menu_setupstick(int32_t nothing, int32_t unused)
 
 // Purpose : Sets control boundaries for flightstick
 // Accepts : Nothing
@@ -3093,13 +3093,13 @@ menu_setupstick(int32_t nothing)
   configuration.stick_z_max = (int32_t) BS_GetStickMaxZ(&joystick);
 
   control_saveconfigure(); // Save config file
-  menu_moveup(0);          // Move up previous menu
+  menu_moveup(0, 0);          // Move up previous menu
 }
 
 /**************************************/
 
 void
-menu_setflightc(int32_t dir_tomove)
+menu_setflightc(int32_t dir_tomove, int32_t unused)
 
 // Purpose : Sets up an individual flight control
 // Accepts : Nothing
@@ -3126,7 +3126,7 @@ menu_setflightc(int32_t dir_tomove)
 /**************************************/
 
 void
-menu_updateflightc(int32_t keypad)
+menu_updateflightc(int32_t keypad, int32_t unused)
 
 // Purpose : Updates set flight controls menu
 // Accepts : Keypad presses
@@ -3135,12 +3135,12 @@ menu_updateflightc(int32_t keypad)
 {
 
   if (keypad & ControlLeft) {
-    menu_setflightc(-1);
+    menu_setflightc(-1, 0);
     menu_enter(FLIGHTCONTROL_MENU, 0);
   }
 
   if (keypad & ControlRight) {
-    menu_setflightc(+1);
+    menu_setflightc(+1, 0);
     menu_enter(FLIGHTCONTROL_MENU, 0);
   }
 }
@@ -3148,7 +3148,7 @@ menu_updateflightc(int32_t keypad)
 /**************************************/
 
 void
-menu_saveflightc(void)
+menu_saveflightc(int32_t unused1, int32_t unused2)
 
 // Purpose : Saves config file and moves up a menu
 // Accepts : Nothing
@@ -3156,7 +3156,7 @@ menu_saveflightc(void)
 
 {
   control_saveconfigure();
-  menu_moveup(0);
+  menu_moveup(0, 0);
 }
 
 /**************************************/
@@ -3191,7 +3191,7 @@ menu_endflightc(int32_t nothing)
 /***************************************************************************************************/
 
 void
-menu_configdefault(int32_t nothing)
+menu_configdefault(int32_t nothing, int32_t nothing2)
 
 // Purpose : Resets game to default configuration
 // Accepts : Nothing
@@ -3206,7 +3206,7 @@ menu_configdefault(int32_t nothing)
   configuration.language = current_language; // Restore old language setting
   control_saveconfigure();                   // Try to save it to NVRAM
   control_setupfromconfigure();              // Set up to new configuration
-  menu_moveup(0);                            // Move up to next menu
+  menu_moveup(0, 0);                         // Move up to next menu
 
   menu_usermessage(USER_DEFAULTCONFIG); // Display 'config reset' message
 }
@@ -3214,7 +3214,7 @@ menu_configdefault(int32_t nothing)
 /**************************************/
 
 void
-menu_setvideo(int32_t new_videoflag)
+menu_setvideo(int32_t new_videoflag, int32_t unused)
 
 // Purpose : Toggles video clips on / off
 // Accepts : New video flag
@@ -3228,7 +3228,7 @@ menu_setvideo(int32_t new_videoflag)
 /**************************************/
 
 void
-menu_setlanguage(int32_t language_toset)
+menu_setlanguage(int32_t language_toset, int32_t unused)
 
 // Purpose : Sets new language for the game
 // Accepts : New language number
@@ -3493,7 +3493,7 @@ menu_getname(char *filename_ptr, int32_t maxsize, char *get_message,
 /**************************************/
 
 void
-menu_setpilotname(int32_t cheat)
+menu_setpilotname(int32_t cheat, int32_t unused)
 
 // Purpose : Allows player to enter default pilots name or select cheat
 // passwords Accepts : nothing Returns : nothing

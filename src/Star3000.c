@@ -246,7 +246,7 @@ main(int argc, char **argv)
   armzsort_create(&plot_list, MAX_GRAPHICPLOT); // Initialise plotting list
   io_resetvideocounter(MAX_WAITBEFOREVIDEO);    // Reset timeout counter
   control_initialisecameras(); // Reset default cameras at start of game
-  control_startgame(0);        // Setup player for new game
+  control_startgame(0, 0);     // Setup player for new game
 
   /****************************************************************************************************
   /

@@ -80,7 +80,7 @@ typedef struct gamefile // Save file structure
   camera_data savefile_cameras[2];       // Players camera settings
 } gamefile;
 
-typedef void (*MenuFunction)();
+typedef void (*MenuFunction)(int32_t, int32_t);
 
 typedef struct menu_info {
   int32_t current_menu, command, selected, hidden;
@@ -166,8 +166,8 @@ extern int32_t cheat_feature4;
 
 // Menu control functions
 
-void menu_moveup(int32_t);             // Move to previous menu
-void menu_movedown(int32_t);           // Move to sub menu
+void menu_moveup(int32_t, int32_t);    // Move to previous menu
+void menu_movedown(int32_t, int32_t);  // Move to sub menu
 void menu_enter(int32_t, int32_t);     // Set up a new menu
 int32_t menu_update(int32_t, int32_t); // Update menu
 void menu_display(int32_t);            // Render menu info to screen
@@ -175,26 +175,26 @@ void menu_resetmenutext(void);         // Clears all menu text cels
 
 // Level menu functions
 
-void menu_setlevel(int32_t); // Select a level
+void menu_setlevel(int32_t, int32_t); // Select a level
 
 // Game pause menu functions
 
 void menu_updateviewpresets(int32_t, int32_t);        // Update all camera menus
 void menu_updatecamerapos(int32_t, int32_t, int32_t); // Update camera positions
-void menu_quitgame(int32_t);                          // Return to main menu
+void menu_quitgame(int32_t, int32_t);                 // Return to main menu
 
 // Formation control functions
 
 int32_t menu_displayformation(int32_t); // Display / count formation on screen
-void menu_formationgroup(int32_t);      // Re-group formation
-void menu_formationattack(int32_t);     // Send formation into attack
-void menu_changeformmode(int32_t);      // Change formation control mode
+void menu_formationgroup(int32_t, int32_t);      // Re-group formation
+void menu_formationattack(int32_t, int32_t);     // Send formation into attack
+void menu_changeformmode(int32_t, int32_t);      // Change formation control mode
 
 // Music control functions
 
-void menu_musicset(int32_t); // Set music mode
-void menu_soundset(int32_t); // Set sound mode
-void menu_trackset(int32_t); // Toggle track on / off
+void menu_musicset(int32_t, int32_t); // Set music mode
+void menu_soundset(int32_t, int32_t); // Set sound mode
+void menu_trackset(int32_t, int32_t); // Toggle track on / off
 void
 menu_setmusictracks(void);    // Setup music playlist from menu track selections
 void menu_displaymusic(void); // Display sound volume info
@@ -204,29 +204,27 @@ void menu_displayjukebox(void);              // Display currently playing track
 
 // NVRam gamefile access functions
 
-void menu_loadgame(int32_t); // Load a previously saved game
-void menu_savegamefile(
-    int32_t); // Gets filename & saves (If no room, goes into replace menu)
-void menu_savegame(int32_t); // Save a game
+void menu_loadgame(int32_t, int32_t);     // Load a previously saved game
+void menu_savegamefile(int32_t, int32_t); // Gets filename & saves (If no room, goes into replace menu)
+void menu_savegame(int32_t, int32_t);     // Save a game
 
 // Configure functions
 
-void menu_setvideo(int32_t);      // Toggles video on / off
-void menu_configdefault(int32_t); // Sets game to standard configuration
-void menu_setlanguage(
-    int32_t); // Change language of game [CURRENTLY EUROPEAN ONLY]
-void menu_setcontrol(int32_t);    // Sets new control method
-void menu_setupstick(int32_t);    // Set up stick boundaries
-void menu_setflightc(int32_t);    // Set buttons for game controls
-void menu_updateflightc(int32_t); // Update setflightcontrols menu
-void menu_saveflightc(void);      // Save config file & move up
+void menu_setvideo(int32_t, int32_t);      // Toggles video on / off
+void menu_configdefault(int32_t, int32_t); // Sets game to standard configuration
+void menu_setlanguage(int32_t, int32_t);   // Change language of game [CURRENTLY EUROPEAN ONLY]
+void menu_setcontrol(int32_t, int32_t);    // Sets new control method
+void menu_setupstick(int32_t, int32_t);    // Set up stick boundaries
+void menu_setflightc(int32_t, int32_t);    // Set buttons for game controls
+void menu_updateflightc(int32_t, int32_t); // Update setflightcontrols menu
+void menu_saveflightc(int32_t, int32_t);   // Save config file & move up
 int32_t menu_endflightc(int32_t); // Check for clashes in controls
 
 // Get User Name functions
 
 int32_t menu_getname(char *, int32_t, char *,
                      int32_t);   // Get name / filename from user
-void menu_setpilotname(int32_t); // Gets default name / cheat
+void menu_setpilotname(int32_t, int32_t); // Gets default name / cheat
 
 // User message display
 

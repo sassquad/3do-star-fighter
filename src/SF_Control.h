@@ -48,9 +48,9 @@ extern BS_StickData joystick;
 
 // Function Prototypes
 
-void control_initialisecameras(void); // Initialise all game stuff on startup
-void control_startgame(int32_t);      // Initialise a new game
-void control_startmission(int32_t);   // Initialise a new mission
+void control_initialisecameras(void);     // Initialise all game stuff on startup
+void control_startgame(int32_t, int32_t); // Initialise a new game
+void control_startmission(int32_t);       // Initialise a new mission
 
 void control_registerdeath(ship_stack *); // A ship has died ! Do something
 void control_searchcamera(int32_t,

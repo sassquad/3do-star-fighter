@@ -59,7 +59,7 @@ control_initialisecameras(void)
 /**************************************/
 
 void
-control_startgame(int32_t nothing)
+control_startgame(int32_t nothing, int32_t nothing2)
 
 // Purpose : Initialises players status & performance at the start of a new game
 // Accepts : Nothing

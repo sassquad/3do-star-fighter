@@ -47,7 +47,7 @@ ifneq (,$(and $(filter 1,$(SSE41)),$(or $(findstring x86_64,$(MACHINE)),$(findst
 endif
 # MinGW detection: compiler triplet contains "mingw" (cross or native)
 ifneq (,$(or $(findstring mingw,$(MACHINE)),$(filter Windows_NT,$(OS))))
-  SDL2_PREFIX := C:\MinGW
+#  SDL2_PREFIX := C:\MinGW
   WIN32 := 1
   EXE   := .exe
   LDFLAGS += -static-libgcc
@@ -94,7 +94,9 @@ else
   endif
   ifeq ($(WIN32),1)
     # we use SDL_MAIN_HANDLED (own main()), so drop SDL2main and the GUI-subsystem flag that sdl2-config adds
-    SDL_LIBS := $(filter-out -lSDL2main -mwindows,$(SDL_LIBS))
+#    SDL_LIBS := $(filter-out -lSDL2main -mwindows,$(SDL_LIBS))
+    # PJH hack, sdl2-config is not present on my mingw32 setup
+    SDL_LIBS := -lSDL2 -lsetupapi -lole32 -loleaut32 -limm32 -lversion -lwinmm -lgdi32 -luser32 -lshell32 -ladvapi32 -luuid -ldinput8 -ldxguid
   endif
   ifeq ($(strip $(SDL_LIBS)),)
     $(warning SDL2 development files not found (sdl2-config / pkg-config sdl2). Install libsdl2-dev or use HEADLESS=1)
