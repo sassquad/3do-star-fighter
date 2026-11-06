@@ -392,7 +392,12 @@ the nodes left unwritten inside that hole, the edge rows and columns of the medi
 are averaged to meet the far grid, the neighbour offsets of the section plotters, and the z-sort
 bucket below which objects are drawn before the hills (`LAND_FAR`). The constraints on the values
 keep those holes and grids whole and symmetric. The altitudes replace the 32/48/64 tests in
-`rotate_land()`; the number of flat rings still follows the resolution.
+`rotate_land()` for the detail level (`res`) only. The number of flat rings (2 to 5, out to the
+horizon) still follows the camera altitude at the game's own 32/48/64, and is never fewer than the
+detail level asks for (`fast_rotation(rotdata, res, rings)`). Until 6 Nov 2026 the rings followed
+`res`, so with the hills kept higher up (e.g. `LAND_FAR_ALTITUDE = 96`) the outer rings were left
+out between 64 and 96 squares of altitude: the black polygon under the horizon showed as a band
+below the curved horizon that moved as the ship turned.
 
 The medium grid builds its 16x16 cels in a cache of 255 slots (8-bit slot numbers), enough for the
 default grid. A larger `LAND_MEDIUM` adds a per-frame overflow pool (`arm_overflowcreation`) used

@@ -60,6 +60,8 @@ int32_t wave_counter, wave_counter2, wave_counter3;
 int32_t land_sort_offset;
 
 static int32_t land_resolution, land_x_pos, land_y_pos;
+/* flat rings drawn beyond the grids: rings + 2 of them (see fast_rotation) */
+static int32_t land_rings;
 static int32_t land_x_pos_outer, land_y_pos_outer, land_x_pos_outer_2,
     land_y_pos_outer_2;
 static int32_t flat_x[5], flat_y[5];
@@ -171,8 +173,13 @@ grid17(int32_t *out, const int32_t *blk, int kind, int xstep, int skipmid,
   }
 }
 
+/* res = landscape detail (0 full .. 3 all flat, from LAND_*_ALTITUDE);
+   rings = how far the flat rings reach (rings + 2 of them, 0..3).  The rings
+   are what reaches the horizon, so they follow the camera altitude at the
+   game's own thresholds, not the detail settings (Rotate_Land.c); with the
+   default settings rings == res, as in the original. */
 void
-fast_rotation(void *rotdata, int32_t res)
+fast_rotation(void *rotdata, int32_t res, int32_t rings)
 {
   const int32_t *rd = (const int32_t *) rotdata;
   int32_t *out = &rotated_coords[0][0];
@@ -187,12 +194,17 @@ fast_rotation(void *rotdata, int32_t res)
   node_offs[1] = mid_base;
   node_offs[2] = far_base;
   node_offs[3] = flat_base;
-  counters[0] = flat_base + 2 * NODES_RING;
-  counters[1] = flat_base - mid_base + 3 * NODES_RING;
-  counters[2] = flat_base - far_base + 4 * NODES_RING;
-  counters[3] = 5 * NODES_RING;
+  if (rings < res) {
+    rings = res;
+  }
+  counters[0] = flat_base;
+  counters[1] = flat_base - mid_base;
+  counters[2] = flat_base - far_base;
+  counters[3] = 0;
+  counters[res] += (rings + 2) * NODES_RING;
 
   land_resolution = res;
+  land_rings = rings;
   /* quick height table: entry h = h * (rotated unit height vector); [17..]
    * land, [0..16] sea surface */
   v[0] = qht[0];
@@ -268,13 +280,7 @@ fast_rotation(void *rotdata, int32_t res)
            far_hole);
   }
   for (k = 0; k < 5; k++) { /* flat rings */
-    if (k == 2 && res <= 0) {
-      break;
-    }
-    if (k == 3 && res <= 1) {
-      break;
-    }
-    if (k == 4 && res <= 2) {
+    if (k >= rings + 2) {
       break;
     }
     flat_x[k] = rd[21 + 5 * k];
@@ -751,20 +757,20 @@ flat_low_res_sorted_land_plotter(void)
   land_res_flat = 1;
   flat_shade = 3;
   flat_low_res_plotter(flat_base + NODES_RING, flat_x[1], flat_y[1], 32);
-  if (land_resolution == 0) {
+  if (land_rings == 0) {
     return;
   }
   land_size_flat = 3;
   flat_shade = 2;
   flat_low_res_plotter(flat_base + 2 * NODES_RING, flat_x[2], flat_y[2], 64);
-  if (land_resolution <= 1) {
+  if (land_rings <= 1) {
     return;
   }
   land_size_flat = 4;
   flat_shade = 1;
   flat_low_res_plotter(flat_base + 3 * NODES_RING, flat_x[3], flat_y[3], 128);
   land_res_flat = 0;
-  if (land_resolution <= 2) {
+  if (land_rings <= 2) {
     return;
   }
   land_size_flat = 5;

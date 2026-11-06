@@ -35,7 +35,7 @@ rotate_land(void)
   int32_t bit_clear = 252;
   int32_t bit_step = 4;
   int32_t loop;
-  int32_t res = 0;
+  int32_t res = 0, rings = 0;
   int32_t rot_nodes[6];
 
   /* Calc step rate across grid rotated */
@@ -219,6 +219,21 @@ rotate_land(void)
     res = 3;
   }
 
+  /* The flat rings beyond the grids reach the horizon, which recedes as the
+     camera climbs: they follow the original altitudes (32/48/64) whatever
+     the detail settings above say.  Tying them to res left the outermost
+     ring(s) out when the hills were kept higher up, and the black polygon
+     under the horizon showed through below it. */
+  if (camera_z_position > (32 << 24)) {
+    rings = 1;
+  }
+  if (camera_z_position > (48 << 24)) {
+    rings = 2;
+  }
+  if (camera_z_position > (64 << 24)) {
+    rings = 3;
+  }
+
   /* Set the 1st pair of coords in quick lookup table
   the machine code will calculate the next 255 */
   // quick_height_table [ 0 ] [ 0 ] = sine_y<<3 ;
@@ -244,5 +259,5 @@ rotate_land(void)
   machine_code_vars[9] = vert_y;
   machine_code_vars[10] = vert_z;
 
-  fast_rotation(&machine_code_vars, res);
+  fast_rotation(&machine_code_vars, res, rings);
 }
