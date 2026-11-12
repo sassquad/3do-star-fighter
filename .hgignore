@@ -5,6 +5,8 @@ syntax: glob
 
 starfighter
 starfighter-headless
+starfighter.exe
 obj
 build
 __pycache__
+SF3000
