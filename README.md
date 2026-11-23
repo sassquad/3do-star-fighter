@@ -24,6 +24,10 @@ which produces `starfighter.exe` (copy `SDL2.dll` next to it; `WINGUI=1` hides t
 for 32- and 64-bit Windows, with recipes run under cmd.exe rules as `mingw32-make` does; see
 `tests/README.md`); it has not been run on Windows by me.
 
+macOS: `make app` builds a double-clickable `build/Star Fighter.app` with SDL and the game data inside.
+See `BUILDING-macOS.md` for a step-by-step guide for first-time users, also available as a web page:
+[BUILDING-macOS.html](BUILDING-macOS.html) (open it in a browser).
+
 Plain GNU Make; no CMake. On x86 the build needs a CPU with SSE4.1 (2008 or later); `make SSE41=0`
 builds for older ones (about a third slower).
 

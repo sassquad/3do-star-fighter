@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Star Fighter for Mac</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a flight-manual page — sticky section rail on the left (top chip strip on phones),
+   one readable column of numbered steps, keycaps and pad buttons drawn as the real objects. */
+:root {
+  --bg: #f2f4f7;
+  --panel: #ffffff;
+  --fg: #151b26;
+  --muted: #586273;
+  --rule: #d9dee6;
+  --accent: #c2541a;        /* the orange of the game's planet backdrop */
+  --accent-soft: #fbe9de;
+  --info: #1f6aa5;
+  --info-soft: #e2eef8;
+  --code-bg: #141a24;
+  --code-fg: #e6ebf2;
+  --code-muted: #8a95a8;
+  --key-bg: #ffffff;
+  --key-edge: #b9c1cd;
+  --xb-a: #2f8a2a; --xb-b: #c8302b; --xb-x: #2563c4;
+  --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1118; --panel: #141a23; --fg: #e3e8ef; --muted: #9aa5b6; --rule: #262f3c;
+    --accent: #ff8a45; --accent-soft: #2e1d12; --info: #6cb4ef; --info-soft: #132433;
+    --code-bg: #070a0f; --code-fg: #e3e8ef; --code-muted: #7d889b;
+    --key-bg: #1d2530; --key-edge: #3a4555;
+    --xb-a: #3fa83a; --xb-b: #d9443f; --xb-x: #3a7bdc;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1118; --panel: #141a23; --fg: #e3e8ef; --muted: #9aa5b6; --rule: #262f3c;
+  --accent: #ff8a45; --accent-soft: #2e1d12; --info: #6cb4ef; --info-soft: #132433;
+  --code-bg: #070a0f; --code-fg: #e3e8ef; --code-muted: #7d889b;
+  --key-bg: #1d2530; --key-edge: #3a4555;
+  --xb-a: #3fa83a; --xb-b: #d9443f; --xb-x: #3a7bdc;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--fg);
+  font: 400 16px/1.6 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code { font-family: var(--font-mono); font-size: 0.9em; background: var(--rule); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+strong { font-weight: 600; }
+
+/* ---- header ---- */
+.masthead {
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+.masthead-inner {
+  max-width: 1120px; margin: 0 auto;
+  padding-block: 2.5rem 2rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 0.75rem;
+}
+.eyebrow {
+  font: 600 0.78rem/1 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent);
+}
+h1 {
+  font: 700 clamp(2rem, 5vw, 3.1rem)/1.05 var(--font-display); margin: 0; letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.lede { max-width: 62ch; color: var(--muted); margin: 0; font-size: 1.05rem; }
+.specs { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin: 0.5rem 0 0; padding: 0; list-style: none;
+  font: 500 0.85rem/1.4 var(--font-mono); color: var(--muted); }
+.specs li span { color: var(--fg); }
+
+/* ---- layout ---- */
+.layout {
+  max-width: 1120px; margin: 0 auto;
+  padding-block: 2rem 4rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 3rem;
+}
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 1.5rem); align-self: start; }
+.toc-title { font: 600 0.72rem/1 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.75rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc a {
+  display: flex; gap: 0.6rem; align-items: baseline;
+  padding: 0.35rem 0.6rem; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.92rem;
+}
+.toc a:hover { background: var(--rule); }
+.toc a.active { background: var(--accent-soft); color: var(--accent); }
+.toc .n { font: 600 0.78rem/1 var(--font-mono); color: var(--muted); min-width: 1.2em; font-variant-numeric: tabular-nums; }
+.toc a.active .n { color: var(--accent); }
+
+main { min-width: 0; max-width: 72ch; }
+section { padding-block: 0.5rem 2.25rem; border-bottom: 1px solid var(--rule); margin-bottom: 2.25rem; }
+section:last-of-type { border-bottom: 0; }
+h2 {
+  font: 700 1.6rem/1.2 var(--font-display); margin: 0 0 1rem; display: flex; gap: 0.75rem; align-items: baseline;
+  text-wrap: balance;
+}
+h2 .num {
+  font: 600 0.95rem/1 var(--font-mono); color: var(--accent);
+  border: 1.5px solid var(--accent); border-radius: 6px; padding: 0.3rem 0.45rem; flex: none;
+  font-variant-numeric: tabular-nums; transform: translateY(-0.15em);
+}
+h3 { font: 600 1.12rem/1.3 var(--font-display); margin: 1.75rem 0 0.6rem; letter-spacing: 0.01em; }
+p { margin: 0 0 1rem; }
+.muted { color: var(--muted); }
+
+ol.steps { margin: 0 0 1rem; padding-left: 1.4rem; display: grid; gap: 0.9rem; }
+ol.steps > li::marker { font: 600 0.95rem var(--font-mono); color: var(--accent); }
+ul.plain { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: 0.75rem; }
+
+/* ---- terminal commands ---- */
+.cmd {
+  position: relative; background: var(--code-bg); color: var(--code-fg); border-radius: 8px;
+  margin: 0.6rem 0 1rem; display: flex; align-items: stretch; min-width: 0;
+}
+.cmd pre {
+  margin: 0; padding: 0.8rem 1rem; overflow-x: auto; flex: 1; min-width: 0;
+  font: 400 0.9rem/1.55 var(--font-mono);
+}
+.cmd.prompt pre::before { content: "$ "; color: var(--code-muted); user-select: none; }
+.cmd .copy {
+  flex: none; border: 0; border-left: 1px solid #ffffff1f; background: transparent; color: var(--code-muted);
+  font: 500 0.75rem/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0 0.9rem; cursor: pointer; border-radius: 0 8px 8px 0;
+}
+.cmd .copy:hover { color: var(--code-fg); background: #ffffff10; }
+.cmd .copy.done { color: var(--xb-a); }
+.cmd.output pre { color: var(--code-muted); }
+
+/* ---- callouts ---- */
+.callout {
+  border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1rem 0 1.25rem;
+  background: var(--info-soft); border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+}
+.callout.warn { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.callout p:last-child { margin-bottom: 0; }
+.callout.skip { margin: 0 0 2rem; }
+.callout .label { font: 600 0.72rem/1 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; display: block; margin-bottom: 0.4rem; color: var(--info); }
+.callout.warn .label { color: var(--accent); }
+
+/* ---- keycaps and pad buttons ---- */
+kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 1.75em; height: 1.75em;
+  padding: 0 0.45em; font: 500 0.82rem/1 var(--font-mono); color: var(--fg);
+  background: var(--key-bg); border: 1px solid var(--key-edge); border-bottom-width: 3px; border-radius: 5px;
+  vertical-align: 0.05em; white-space: nowrap;
+}
+.pad {
+  display: inline-flex; align-items: center; justify-content: center; width: 1.75em; height: 1.75em;
+  border-radius: 50%; color: #fff; font: 700 0.82rem/1 var(--font-display); vertical-align: 0.05em;
+}
+.pad.a { background: var(--xb-a); } .pad.b { background: var(--xb-b); } .pad.x { background: var(--xb-x); }
+.pill {
+  display: inline-flex; align-items: center; height: 1.75em; padding: 0 0.6em; border-radius: 999px;
+  font: 600 0.78rem/1 var(--font-display); letter-spacing: 0.04em;
+  background: var(--key-bg); border: 1px solid var(--key-edge); color: var(--fg); vertical-align: 0.05em; white-space: nowrap;
+}
+.or { color: var(--muted); font-size: 0.85em; margin: 0 0.25em; }
+
+/* ---- tables ---- */
+.table-wrap { overflow-x: auto; margin: 0.5rem 0 1.25rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+th { font: 600 0.72rem/1.2 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+td:first-child { white-space: nowrap; }
+tr.key-row td { background: var(--accent-soft); }
+td.dash { color: var(--muted); }
+
+/* ---- the settings folder ---- */
+.tree { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; overflow-x: auto; margin: 0.6rem 0 1rem; }
+.tree pre { margin: 0; padding: 0.9rem 1rem; font: 400 0.88rem/1.7 var(--font-mono); }
+.tree .dir { color: var(--accent); font-weight: 500; }
+.tree .note { color: var(--muted); }
+
+/* ---- troubleshooting ---- */
+.faq { display: grid; gap: 0.75rem; }
+.faq article { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.1rem; min-width: 0; }
+.faq h3 { margin: 0 0 0.4rem; font-size: 1.02rem; }
+.faq p:last-child, .faq ol:last-child { margin-bottom: 0; }
+
+.dev { font-size: 0.94rem; }
+.dev li { color: var(--fg); }
+
+footer { color: var(--muted); font-size: 0.85rem; }
+
+/* ---- phone ---- */
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; padding-top: 0; }
+  nav.toc {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+    margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+    margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+    padding-block: 0.6rem;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    border-bottom: 1px solid var(--rule); overflow-x: auto;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .toc-title { display: none; }
+  .toc ol { display: flex; gap: 0.4rem; width: max-content; }
+  .toc a { white-space: nowrap; border: 1px solid var(--rule); background: var(--panel); padding: 0.3rem 0.65rem; font-size: 0.85rem; }
+  html { scroll-padding-top: 64px; }
+  h2 { font-size: 1.35rem; }
+  th, td { padding: 0.5rem 0.7rem; }
+}
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <span class="eyebrow">3DO classic · SDL2 port · macOS</span>
+    <h1>Building and playing Star Fighter on a Mac</h1>
+    <p class="lede">This guide takes you from the downloaded source code to a <strong>Star Fighter</strong> app you can double-click, then explains the controls. You don't need to know how to program. You'll type a few commands into Terminal, and the whole process takes about 15 minutes, most of it waiting for downloads.</p>
+    <ul class="specs">
+      <li>Runs on <span>Apple Silicon (M1 and later) and Intel</span></li>
+      <li>Original resolution <span>320 × 240</span></li>
+      <li>App size <span>≈ 430 MB</span></li>
+    </ul>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Sections">
+    <p class="toc-title">Contents</p>
+    <ol>
+      <li><a href="#install"><span class="n">1</span>Install the tools</a></li>
+      <li><a href="#game-folder"><span class="n">2</span>Get the game folder ready</a></li>
+      <li><a href="#build"><span class="n">3</span>Build the app</a></li>
+      <li><a href="#first-launch"><span class="n">4</span>First launch</a></li>
+      <li><a href="#controls"><span class="n">5</span>Controls</a></li>
+      <li><a href="#game-settings"><span class="n">6</span>Settings</a></li>
+      <li><a href="#troubleshooting"><span class="n">7</span>Troubleshooting</a></li>
+      <li><a href="#developers"><span class="n">›</span>For developers</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="callout skip">
+      <span class="label">Were you sent the ready-made app?</span>
+      <p>If you already have <strong>Star Fighter.app</strong>, you don't need to build anything: skip to <a href="#first-launch">4. First launch</a>. If macOS says the app can't be opened, see <a href="#troubleshooting">Troubleshooting</a>.</p>
+    </div>
+    <section id="install">
+      <h2><span class="num">01</span>Install the tools <span class="muted" style="font: 400 0.95rem var(--font-body)">(one time only)</span></h2>
+
+      <h3>Apple's command line tools</h3>
+      <p>These provide the compiler that turns the source code into a program.</p>
+      <ol class="steps">
+        <li>Open <strong>Terminal</strong>: press <kbd>⌘</kbd> <kbd>Space</kbd>, type <code>Terminal</code> and press <kbd>Return</kbd>.</li>
+        <li>Paste this line and press <kbd>Return</kbd>:
+          <div class="cmd prompt"><pre>xcode-select --install</pre></div>
+        </li>
+        <li>A window asks whether to install the tools. Click <strong>Install</strong> and wait for it to finish. If it says the tools are <em>already installed</em>, that's fine: go on to the next step.</li>
+      </ol>
+
+      <h3>Homebrew and SDL2</h3>
+      <p><a href="https://brew.sh" target="_blank" rel="noopener">Homebrew</a> is a free package manager for macOS. The game uses it to get <strong>SDL2</strong>, the library that handles the window, sound, keyboard and game controllers.</p>
+      <ol class="steps">
+        <li>If you don't have Homebrew yet, open <a href="https://brew.sh" target="_blank" rel="noopener">brew.sh</a>, copy the install command shown on the page, paste it into Terminal and press <kbd>Return</kbd>. Follow the instructions it prints at the end. They include two or three lines to copy and run so that the <code>brew</code> command works.</li>
+        <li>Install SDL2:
+          <div class="cmd prompt"><pre>brew install sdl2</pre></div>
+          <p class="muted">Homebrew now installs "sdl2-compat", which runs SDL2 programs on the newer SDL3. That's expected: the game works with it, and the app built below includes both libraries.</p>
+        </li>
+        <li><strong>Optional, for a wired Xbox controller</strong> (Xbox One / Series, including third-party pads such as PowerA): also install
+          <div class="cmd prompt"><pre>brew install cmake libusb</pre></div>
+          <p class="muted">macOS has no driver for these controllers over USB, so the game needs its own copy of SDL3 that can talk to them directly. <a href="#build">Section 3</a> builds it. You don't need this for the keyboard, or for controllers that macOS supports itself (an Xbox Wireless Controller paired over Bluetooth, or a PlayStation or Switch Pro controller).</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="game-folder">
+      <h2><span class="num">02</span>Get the game folder ready</h2>
+      <p>You need the downloaded <strong>star-fighter-sdl</strong> folder. It contains <code>Makefile</code>, <code>src</code> and <strong><code>SF_Resources</code></strong>, which holds the game's data: graphics, missions, music, voices and, if included, the videos. Without <code>SF_Resources</code> the game can't run.</p>
+      <p>In Terminal, move into the folder. Type <code>cd</code> followed by a space, drag the folder from Finder onto the Terminal window, then press <kbd>Return</kbd>. It will look something like this:</p>
+      <div class="cmd prompt"><pre>cd ~/Downloads/star-fighter-sdl</pre></div>
+    </section>
+
+    <section id="build">
+      <h2><span class="num">03</span>Build the app</h2>
+      <p><strong>If you'll play with a wired Xbox controller,</strong> first run this once. It downloads SDL3, checks the download, and builds it with USB controller support. It takes a few minutes:</p>
+      <div class="cmd prompt"><pre>make sdl3-libusb</pre></div>
+      <p>Then, still in Terminal, run:</p>
+      <div class="cmd prompt"><pre>make app</pre></div>
+      <p>The build prints <code>SDL3 with libusb: wired Xbox controllers supported</code> if it found that SDL3. Otherwise it prints a note saying wired Xbox controllers won't work.</p>
+      <p>This takes a minute or two. Lines of compiler output scroll past. One warning is normal and can be ignored: <code>ld: warning: reducing alignment of section __DATA,__common</code>.</p>
+      <p>When it finishes, the last line looks like this:</p>
+      <div class="cmd output"><pre>== done: .../build/Star Fighter.app (427M, macOS 27.2+, arm64)</pre></div>
+      <p>Your app is <strong><code>build/Star Fighter.app</code></strong>. It's self-contained: SDL and all of the game data are inside it.</p>
+      <p>To open the folder in Finder:</p>
+      <div class="cmd prompt"><pre>open build</pre></div>
+      <p>You can drag <strong>Star Fighter.app</strong> into your <strong>Applications</strong> folder and start it from there, from Launchpad, or from Spotlight like any other app.</p>
+      <div class="callout">
+        <span class="label">Keeping the data somewhere else?</span>
+        <p>If your <code>SF_Resources</code> folder isn't inside the game folder, tell the build where it is: <code>make app RES=/path/to/SF_Resources</code>.</p>
+      </div>
+    </section>
+
+    <section id="first-launch">
+      <h2><span class="num">04</span>First launch</h2>
+      <p>Double-click <strong>Star Fighter</strong>. The intro plays (if the video files are present), followed by the main menu.</p>
+      <p>The game starts in a small 320×240 window, the original 3DO resolution. The window can be resized and maximised. To render at a higher resolution, see <a href="#game-settings">Settings</a> below.</p>
+    </section>
+
+    <section id="controls">
+      <h2><span class="num">05</span>Controls</h2>
+      <p>The game was designed for the 3DO joypad, so each key stands in for a pad button.</p>
+      <div class="callout warn">
+        <span class="label">Important</span>
+        <p>To select a menu item, press <kbd>Z</kbd>, not <kbd>Return</kbd>. Return and Space are the pad's <em>Start</em> button, which goes <strong>back</strong> in menus.</p>
+      </div>
+
+      <h3>In the menus</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>Move the cursor</td></tr>
+          <tr class="key-row"><td><kbd>Z</kbd></td><td><strong>Select</strong></td></tr>
+          <tr><td><kbd>Return</kbd> <kbd>Space</kbd> <kbd>Esc</kbd> <kbd>⌫</kbd></td><td>Back to the previous menu</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>In flight</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Pitch (nose down / up)</td></tr>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Turn</td></tr>
+          <tr class="key-row"><td><kbd>S</kbd></td><td><strong>Fire</strong> the selected weapon</td></tr>
+          <tr><td><kbd>A</kbd></td><td>Switch weapon (laser, missiles, mines…)</td></tr>
+          <tr><td><kbd>Z</kbd></td><td>Thrust</td></tr>
+          <tr><td><kbd>X</kbd></td><td>Fire ECM (countermeasures)</td></tr>
+          <tr><td><kbd>C</kbd></td><td>Change camera view</td></tr>
+          <tr><td><kbd>Return</kbd> <kbd>Space</kbd></td><td>Map</td></tr>
+          <tr><td><kbd>Esc</kbd> <kbd>⌫</kbd></td><td>In-flight menu</td></tr>
+        </tbody>
+      </table></div>
+      <p>These are the game's defaults. The in-game <strong>flight controls</strong> menu lets you reassign the actions (for example, put Fire on a different button) or swap up and down for pitch.</p>
+
+      <h3>With a game controller</h3>
+      <p>Xbox, PlayStation and Switch Pro controllers work. You can connect or reconnect one at any time, including while the game is running. On an Xbox controller:</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Xbox button</th><th>Menus</th><th>Flight</th></tr></thead>
+        <tbody>
+          <tr class="key-row"><td><span class="pad a" aria-label="A">A</span></td><td><strong>Select</strong></td><td>Thrust</td></tr>
+          <tr><td><span class="pad b" aria-label="B">B</span></td><td class="dash">—</td><td>Fire ECM</td></tr>
+          <tr><td><span class="pad x" aria-label="X">X</span></td><td class="dash">—</td><td>Change camera view</td></tr>
+          <tr class="key-row"><td><span class="pill">RB</span><span class="or">or</span><span class="pill">RT</span></td><td class="dash">—</td><td><strong>Fire</strong></td></tr>
+          <tr><td><span class="pill">LB</span><span class="or">or</span><span class="pill">LT</span></td><td class="dash">—</td><td>Switch weapon</td></tr>
+          <tr><td><span class="pill">☰ Menu</span></td><td>Back</td><td>Map</td></tr>
+          <tr><td><span class="pill">⧉ View</span></td><td>Back</td><td>In-flight menu</td></tr>
+          <tr><td><span class="pill">D-pad</span><span class="or">or</span><span class="pill">Left stick</span></td><td>Move</td><td>Steer</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">PlayStation pads use the same positions: Cross = A, Circle = B, Square = X, R1/R2 = fire.</p>
+      <div class="callout warn">
+        <span class="label">Quit Steam before playing with a controller</span>
+        <p>While Steam is running, it takes over Xbox controllers for itself and the game can't see them. Use <strong>Steam ▸ Quit Steam</strong> in the menu bar; closing the window isn't enough.</p>
+      </div>
+    </section>
+
+    <section id="game-settings">
+      <h2><span class="num">06</span>Settings</h2>
+      <p>The game keeps its settings and saves in your user Library, not inside the app:</p>
+      <div class="tree"><pre><span class="dir">~/Library/Application Support/Star Fighter/</span>
+    config.txt         <span class="note">keyboard layout, resolution, draw distances</span>
+    Saves/             <span class="note">saved games</span>
+    starfighter.log    <span class="note">messages from the game (useful if something goes wrong)</span></pre></div>
+      <p>To get there, open Finder, choose <strong>Go ▸ Go to Folder…</strong> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>G</kbd>) and paste:</p>
+      <div class="cmd"><pre>~/Library/Application Support/Star Fighter</pre></div>
+      <p><strong><code>config.txt</code></strong> is created the first time you run the game. Open it in TextEdit, change it, save, and restart the game. It explains each setting. The most useful ones:</p>
+      <ul class="plain">
+        <li><strong>Change keys.</strong> Each line lists the keys for one pad button. For example, to select menu items with Return as well as Z (Space then remains the Start button):
+          <div class="cmd"><pre>A     = Z, Return
+START = Space</pre></div>
+          A key can belong to only one button. If the file has a mistake, the game shows a message listing the problem and quits. To go back to the defaults, delete <code>config.txt</code>.
+        </li>
+        <li><strong>Sharper graphics.</strong> <code>SCALE = 2</code> (640×480), <code>3</code> or <code>4</code> (1280×960) draws the 3D view at a higher resolution. The menus and cockpit keep their original look. Higher values use more CPU.</li>
+        <li><strong>Draw distances.</strong> <code>LAND_NEAR</code>, <code>LAND_FAR</code>, <code>OBJECT_DISTANCE</code> and the related settings make the landscape and objects visible further away.</li>
+      </ul>
+    </section>
+
+    <section id="troubleshooting">
+      <h2><span class="num">07</span>Troubleshooting</h2>
+      <div class="faq">
+        <article>
+          <h3>Nothing happens when I press Return in the menu.</h3>
+          <p>Use <kbd>Z</kbd> to select (see <a href="#controls">Controls</a>).</p>
+        </article>
+        <article>
+          <h3>Left Ctrl + arrow keys switch desktops or open Mission Control.</h3>
+          <p>Left Ctrl is also a pad button (A) in the default layout, but macOS uses Ctrl + arrows for its own shortcuts. Use <kbd>Z</kbd> instead, or turn those shortcuts off in <strong>System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control</strong>.</p>
+        </article>
+        <article>
+          <h3>The app won't open on another Mac ("can't be opened" / "damaged").</h3>
+          <p>The app is signed only for the Mac it was built on. On the other Mac, either build it there using this guide, or right-click the app, choose <strong>Open</strong>, then click <strong>Open</strong> again. If that doesn't work, run this in Terminal once and try again:</p>
+          <div class="cmd prompt"><pre>xattr -dr com.apple.quarantine "/Applications/Star Fighter.app"</pre></div>
+          <p>The other Mac also needs the same type of processor (Apple Silicon or Intel) and a macOS version at least as new as the one the app was built on.</p>
+        </article>
+        <article>
+          <h3>My controller doesn't do anything.</h3>
+          <ol class="steps">
+            <li>Quit Steam completely (<strong>Steam ▸ Quit Steam</strong>). It takes Xbox controllers for itself, even when it's only running in the background.</li>
+            <li>For a <em>wired</em> Xbox One / Series controller, the app must be built with USB controller support: run <code>make sdl3-libusb</code> and then <code>make app</code> again (see <a href="#build">Build the app</a>).</li>
+            <li>Look in <code>starfighter.log</code> (see <a href="#game-settings">Settings</a>). When the game finds a controller it writes a line like <code>controller: using 'PowerA Xbox Series X Wired Controller Black'</code>. If that line is missing, the game didn't see the controller. Unplug it, plug it back in, and restart the game.</li>
+          </ol>
+        </article>
+        <article>
+          <h3>The game quits immediately or shows an error.</h3>
+          <p>Look at the end of <code>starfighter.log</code> (see <a href="#game-settings">Settings</a>). A common cause is a mistake in <code>config.txt</code>: delete the file and the game creates a fresh one.</p>
+        </article>
+        <article>
+          <h3><code>make: sdl2-config: command not found</code> or <code>SDL.h not found</code></h3>
+          <p>SDL2 isn't installed, or Homebrew isn't set up in your Terminal. Run <code>brew install sdl2</code>. If <code>brew</code> itself isn't found, re-run the setup lines Homebrew printed when it was installed, then open a new Terminal window.</p>
+        </article>
+        <article>
+          <h3><code>make app</code> says <code>no game data at …</code></h3>
+          <p>The build can't find <code>SF_Resources</code>. Check that it's inside the game folder, or give its location with <code>make app RES=/path/to/SF_Resources</code>.</p>
+        </article>
+        <article>
+          <h3>No videos play.</h3>
+          <p>Videos are optional and are skipped when their files aren't in <code>SF_Resources/Video</code>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="developers" class="dev">
+      <h2><span class="num">›</span>For developers</h2>
+      <ul class="plain">
+        <li><code>make</code> builds a plain <code>./starfighter</code> binary that uses Homebrew's SDL; run it with <code>./starfighter SF_Resources</code>. It reads and writes <code>config.txt</code> in the current directory and saves to <code>~/.local/share/starfighter</code> (or <code>$SF_SAVEDIR</code>).</li>
+        <li><code>make app</code> runs <code>tools/make-macos-app.sh</code>. The script builds into <code>build/macapp/</code>, copies the SDL2 dylib (and, for sdl2-compat, <code>libSDL3.dylib</code>, which it loads from its own directory) into <code>Contents/Frameworks</code>, rewrites the library paths with <code>install_name_tool</code>, copies <code>SF_Resources</code> into <code>Contents/Resources</code>, makes an icon from <code>Images/Menu0.png</code>, and ad-hoc signs the bundle. <code>tools/make-macos-app.sh --no-resources</code> leaves the data out; the app then needs <code>SF_RESOURCES</code> set.</li>
+        <li><code>make sdl3-libusb</code> runs <code>tools/build-sdl3-libusb.sh</code>: SDL3 3.4.20 (checked against a pinned SHA-256), built with <code>SDL_HIDAPI_LIBUSB=ON</code> and libusb linked in, installed to <code>build/deps/sdl3-install</code>. <code>make app</code> bundles that SDL3 and libusb when present (<code>SDL3_LIB=/path/to/libSDL3.0.dylib</code> picks another). Wired Xbox One / Series pads use Microsoft's GIP protocol on a vendor-specific USB interface (class <code>ff/47/d0</code>), not HID, so macOS doesn't expose them. SDL's HIDAPI Xbox One driver drives them through libusb on macOS. If another process holds the device (<code>ioreg -l -r -n '&lt;device name&gt;' | grep UsbExclusiveOwner</code>; usually Steam), libusb's claim fails with <code>LIBUSB_ERROR_ACCESS</code> and SDL sees no controller.</li>
+        <li>The SDL front end (<code>src/plat_sdl.c</code>) uses the first game controller connected, picks up another one or the same one again after a disconnect, treats the triggers as the shoulder buttons, and logs the controller's name. <code>SF_RECORD=file</code> records the pad buttons the game sees; it's useful for checking a controller.</li>
+        <li><code>make test</code> passes on macOS (Python 3 from the command line tools is enough). The linker's alignment warning appears as a <em>warn</em> on the build checks and is listed in <code>tests/clang-warnings.txt</code>. The 3DO golden-frame comparisons are skipped, with a warning, when your <code>SF_Resources</code> differs from the copy the goldens were recorded with.</li>
+        <li>To give the app to other people without the warnings in <a href="#troubleshooting">Troubleshooting</a>, sign it with a Developer ID and notarize it with Apple.</li>
+      </ul>
+      <footer>From <code>BUILDING-macOS.md</code> in the star-fighter-sdl source folder.</footer>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  // copy buttons on every command block
+  document.querySelectorAll('.cmd').forEach(function (box) {
+    if (box.classList.contains('output')) return;
+    var pre = box.querySelector('pre');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy';
+    btn.textContent = 'Copy';
+    btn.setAttribute('aria-label', 'Copy command');
+    btn.addEventListener('click', function () {
+      var text = pre.textContent;
+      function selectIt() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'Selected';
+      }
+      function done() {
+        btn.textContent = 'Copied'; btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, selectIt);
+        } else { selectIt(); }
+      } catch (e) { selectIt(); }
+    });
+    box.appendChild(btn);
+  });
+
+  // highlight the section being read in the contents rail
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && byId[e.target.id]) {
+          links.forEach(function (a) { a.classList.remove('active'); });
+          byId[e.target.id].classList.add('active');
+          if (window.matchMedia('(max-width: 860px)').matches) {
+            byId[e.target.id].scrollIntoView({ block: 'nearest', inline: 'center' });
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    document.querySelectorAll('main section[id]').forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
