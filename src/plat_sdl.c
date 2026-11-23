@@ -327,6 +327,20 @@ key_up(SDL_Keycode k)
   }
 }
 
+/* open game controller number i (an SDL device index) as our pad */
+static void
+pad_open(int i)
+{
+  pad_dev = SDL_GameControllerOpen(i);
+  if (pad_dev) {
+    const char *name = SDL_GameControllerName(pad_dev);
+    fprintf(stderr, "controller: using '%s'\n", name ? name : "?");
+  } else {
+    fprintf(stderr, "controller: cannot open device %d: %s\n", i,
+            SDL_GetError());
+  }
+}
+
 uint32_t
 plat_pad(void)
 {
@@ -340,7 +354,24 @@ plat_pad(void)
     } else if (e.type == SDL_KEYUP) {
       key_up(e.key.keysym.sym);
     } else if (e.type == SDL_CONTROLLERDEVICEADDED && !pad_dev) {
-      pad_dev = SDL_GameControllerOpen(e.cdevice.which);
+      pad_open(e.cdevice.which);
+    } else if (e.type == SDL_CONTROLLERDEVICEREMOVED && pad_dev &&
+               e.cdevice.which ==
+                   SDL_JoystickInstanceID(
+                       SDL_GameControllerGetJoystick(pad_dev))) {
+      /* our controller was unplugged: drop it and use another one if any
+         (when it is plugged in again, SDL sends CONTROLLERDEVICEADDED) */
+      fprintf(stderr, "controller: disconnected\n");
+      SDL_GameControllerClose(pad_dev);
+      pad_dev = NULL;
+      {
+        int i;
+        for (i = 0; i < SDL_NumJoysticks() && !pad_dev; i++) {
+          if (SDL_IsGameController(i)) {
+            pad_open(i);
+          }
+        }
+      }
     }
   }
   m = held_mask();
@@ -377,6 +408,16 @@ plat_pad(void)
       m |= ControlLeftShift;
     }
     if (B(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) {
+      m |= ControlRightShift;
+    }
+    /* the triggers do the same as the shoulder buttons (by default the right
+       one fires, the left one changes weapon) */
+    if (SDL_GameControllerGetAxis(pad_dev, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >
+        16000) {
+      m |= ControlLeftShift;
+    }
+    if (SDL_GameControllerGetAxis(pad_dev, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >
+        16000) {
       m |= ControlRightShift;
     }
     {
