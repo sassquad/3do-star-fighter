@@ -1,0 +1,13 @@
+# Converted from .hgignore, plus macOS Finder files
+*.orig
+*~
+
+/starfighter
+/starfighter-headless
+/starfighter.exe
+obj/
+build/
+__pycache__/
+SF3000
+
+.DS_Store
