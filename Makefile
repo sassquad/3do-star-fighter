@@ -188,8 +188,15 @@ celbench:
 test-performance:
 	$(RUNTEST) performance $(if $(REPEAT),--repeat $(REPEAT)) $(if $(ONLY),--only $(ONLY)) $(if $(SCALE),--scale $(SCALE))
 
+# macOS: build "build/Star Fighter.app" with SDL and the game data inside (see tools/make-macos-app.sh)
+app:
+	RES="$(RES)" tools/make-macos-app.sh
+# macOS: SDL3 with libusb, which 'make app' then bundles, for wired Xbox controllers (needs cmake, libusb)
+sdl3-libusb:
+	tools/build-sdl3-libusb.sh
+
 clean:
 	rm -rf $(OBJDIR) build starfighter starfighter-headless starfighter.exe starfighter-headless.exe
 
 -include $(DEPS)
-.PHONY: all clean unit-tests test test-asan test-full rebless restamp celtrace celbench test-performance
+.PHONY: all app sdl3-libusb clean unit-tests test test-asan test-full rebless restamp celtrace celbench test-performance
