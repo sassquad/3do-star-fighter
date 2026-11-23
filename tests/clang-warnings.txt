@@ -5,5 +5,6 @@
 # (not valid C23; harmless today)
 SF_Bonus.c -Wdeprecated-non-prototype 2
 SF_Menu.c -Wdeprecated-non-prototype 2
-# section_data is assigned but never read in setup_tables
-Setup_Tables.c -Wunused-but-set-variable 1
+# macOS only: Apple's linker (ld64) caps the __DATA segment's alignment at 16 KB and says so when a
+# large zero-initialised global asks for 32 KB.  Harmless: 16 KB is the page size on arm64 macOS.
+ld: warning: reducing alignment of section __DATA,__common from 0x8000 to 0x4000 because it exceeds segment maximum alignment 1

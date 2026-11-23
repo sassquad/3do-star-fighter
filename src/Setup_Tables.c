@@ -35,7 +35,8 @@ setup_tables(void)
 
   section_groups *section_group_data;
   section_details_header *section_data_header = NULL;
-  section_details *section_data;
+  /* only read by the commented-out debug printfs below (newer clang warns) */
+  section_details *section_data __attribute__((unused));
 
   // Reset camera stuff
   ship_viewed_last_frame = NULL;
